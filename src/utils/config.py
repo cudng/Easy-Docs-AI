@@ -3,6 +3,10 @@ import flet as ft
 
 class Config:
     PRIMARY = "#5BC8E8"
+    TEAL = "#00BCD4"
+    TEAL_DARK = "#0097A7"
+    AI_PURPLE = "#7C3AED"
+    GREY_BG = ft.Colors.SURFACE_CONTAINER_LOWEST
     FONT = "Inter"
     THEME = ft.Theme(
         color_scheme=ft.ColorScheme(primary="#000000", on_primary="#FFFFFF")
@@ -18,6 +22,21 @@ class Config:
     PAGE_FONTS = {
         "Inter": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7SUc.woff2"
     }
-    mobile: dict[str, int] = {"font_size": 30, "left_margin": 20, "top_margin": 50}
-    tablet: dict[str, int] = {"font_size": 45, "left_margin": 100, "top_margin": 100}
-    desktop: dict[str, int] = {"font_size": 60, "left_margin": 150, "top_margin": 100}
+    mobile: dict[str, int] = {
+        "font_size": 35,
+        "left_margin": 20,
+        "top_margin": 20,
+        "right_margin": 50,
+    }
+    tablet: dict[str, int] = {
+        "font_size": 45,
+        "left_margin": 80,
+        "top_margin": 50,
+        "right_margin": 100,
+    }
+    desktop: dict[str, int] = {
+        "font_size": 60,
+        "left_margin": 100,
+        "top_margin": 100,
+        "right_margin": 150,
+    }

@@ -11,7 +11,7 @@ class Appbar(ft.AppBar):
                     ft.VerticalDivider(color=ft.Colors.TRANSPARENT, width=margin_left),
                     ft.Container(
                         ft.Image(Config.SVG, color="#13DAEC"),  # noqa
-                        padding=ft.Padding.only(left=10, top=10, bottom=10),
+                        padding=ft.Padding.only(top=10, bottom=10),
                     ),
                     ft.Text(
                         "Easy Docs AI",
@@ -40,10 +40,10 @@ class Appbar(ft.AppBar):
                     bgcolor="#13DAEC",
                     color=ft.Colors.BLACK,
                     margin=ft.Margin.only(right=20),
+                    style=ft.ButtonStyle(shape=ft.ContinuousRectangleBorder(radius=10)),
                 ),  # noqa
             ],
         )
 
     def update_margin(self, w: int):
         self.leading.controls[0].width = w
-        self.update()

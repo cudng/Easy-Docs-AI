@@ -3,13 +3,17 @@ import flet.canvas as cv
 
 from utils import Config
 
+from . import ChatMock
 
-class Hero(ft.Row):
+
+class Hero(ft.ResponsiveRow):
     def __init__(self, font_size: int):
         super().__init__(
             alignment=ft.MainAxisAlignment.CENTER,
             expand=True,
             vertical_alignment=ft.CrossAxisAlignment.START,
+            spacing=0,
+            run_spacing=10,
         )
 
         self.font_size = font_size
@@ -26,8 +30,13 @@ class Hero(ft.Row):
         ) + self._make_span_shapes(0, self.span_y, font_size)
 
         self.left_container = ft.Container(
-            height=400,
-            width=600,
+            height=320,
+            col={
+                ft.ResponsiveRowBreakpoint.XS: 10,
+                ft.ResponsiveRowBreakpoint.MD: 7,
+                ft.ResponsiveRowBreakpoint.LG: 5,
+            },
+            margin=ft.Margin.only(top=25),
             content=ft.Column(
                 [
                     self.title_canvas,
@@ -46,22 +55,50 @@ class Hero(ft.Row):
                         ],
                         width=400,
                     ),
+                    ft.Row(
+                        [
+                            ft.Button(
+                                "Start Now",
+                                height=40,
+                                margin=ft.Margin.only(top=10),
+                                style=ft.ButtonStyle(
+                                    shape=ft.ContinuousRectangleBorder(radius=10)
+                                ),
+                                bgcolor="#13DAEC",
+                                on_click=self.go_to_session,
+                            ),
+                            ft.Button(
+                                "Login to Save History",
+                                height=40,
+                                margin=ft.Margin.only(top=10),
+                                style=ft.ButtonStyle(
+                                    shape=ft.ContinuousRectangleBorder(radius=10)
+                                ),
+                            ),
+                        ]
+                    ),
                 ],
                 spacing=8,
                 tight=True,
             ),
         )
 
-        self.right_container = ft.Container(
-            content=ft.Card(
-                elevation=10,
-                bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
-                height=400,
-                width=600,
-            ),
+        self.right_container = ft.Card(
+            col={
+                ft.ResponsiveRowBreakpoint.XS: 10,
+                ft.ResponsiveRowBreakpoint.MD: 7,
+                ft.ResponsiveRowBreakpoint.LG: 5,
+            },
+            height=390,
+            elevation=10,
+            bgcolor=Config.GREY_BG,
+            content=ChatMock(),
         )
 
-        self.controls = [self.left_container, self.right_container]
+        self.controls = [
+            self.left_container,
+            self.right_container,
+        ]
 
     def rebuild_shapes(self, size: float):
         title_y = 0
@@ -74,6 +111,11 @@ class Hero(ft.Row):
 
     def on_canvas_resize(self):
         self.rebuild_shapes(self.font_size)
+
+    def update_card(self):
+        self.right_container.width = 400
+        self.right_container.height = 300
+        self.right_container.update()
 
     @staticmethod
     def _make_title_shapes(x: float, y: float, size: float) -> list:
@@ -153,3 +195,6 @@ class Hero(ft.Row):
             ),
         )
         return [stroke, fill]
+
+    async def go_to_session(self):
+        await self.page.push_route("/session")

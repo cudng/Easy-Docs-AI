@@ -2,7 +2,7 @@ import asyncio
 
 import flet as ft
 
-from views import HomePage
+from views import HomePage, SessionMode
 
 
 class RouteHandler:
@@ -11,7 +11,7 @@ class RouteHandler:
         # self.db = db
 
     def route(self, e=None):
-        """Called directly on startup, or passed to page.on_route_change."""
+        """Called directly on the startup or passed to page.on_route_change."""
         self.page.views.clear()
 
         match self.page.route:
@@ -27,8 +27,8 @@ class RouteHandler:
             case "/":
                 self.page.views.append(HomePage(page=self.page))
 
-            # case "/add":
-            #     self.page.views.append(views.Add(self.page, self.db))
+            case "/session":
+                self.page.views.append(SessionMode(page=self.page))
             #
             # case "/delete":
             #     self.page.views.append(views.Delete(self.page, self.db))

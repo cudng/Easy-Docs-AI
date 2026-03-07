@@ -5,7 +5,7 @@ from utils import Config
 
 class Breakpoint:
     MOBILE_BREAKPOINT = 600
-    TABLET_BREAKPOINT = 1200
+    LAPTOP_BREAKPOINT = 1200
 
 
 class ScreenSize(Enum):
@@ -25,7 +25,7 @@ class Responsive:
 
         if w < Breakpoint.MOBILE_BREAKPOINT:
             return ScreenSize.MOBILE
-        elif w < Breakpoint.TABLET_BREAKPOINT:
+        elif w < Breakpoint.LAPTOP_BREAKPOINT:
             return ScreenSize.TABLET
         else:
             return ScreenSize.DESKTOP
