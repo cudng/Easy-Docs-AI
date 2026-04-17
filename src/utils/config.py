@@ -6,6 +6,7 @@ class Config:
     TEAL = "#00BCD4"
     TEAL_DARK = "#0097A7"
     AI_PURPLE = "#7C3AED"
+    ERROR = "#F44336"
     GREY_BG = ft.Colors.SURFACE_CONTAINER_LOWEST
     FONT = "Inter"
     THEME = ft.Theme(
@@ -27,16 +28,19 @@ class Config:
         "left_margin": 20,
         "top_margin": 20,
         "right_margin": 50,
+        "list_padding": 20,
     }
     tablet: dict[str, int] = {
         "font_size": 45,
         "left_margin": 80,
         "top_margin": 50,
         "right_margin": 100,
+        "list_padding": 50,
     }
     desktop: dict[str, int] = {
         "font_size": 60,
         "left_margin": 100,
         "top_margin": 100,
         "right_margin": 150,
+        "list_padding": 150,
     }

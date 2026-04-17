@@ -2,7 +2,17 @@ import asyncio
 
 import flet as ft
 
-from views import HomePage, SessionMode
+from views import (
+    AuthCallbackPage,
+    ChatPage,
+    ConfirmEmailPage,
+    HomePage,
+    LoginPage,
+    PageNotFound,
+    RegisterPage,
+    RestorePassword,
+    SessionMode,
+)
 
 
 class RouteHandler:
@@ -15,32 +25,35 @@ class RouteHandler:
         self.page.views.clear()
 
         match self.page.route:
-            # case "/login":
-            #     self.page.views.append(views.Login(self.page, self.db))
-            #
-            # case "/password":
-            #     self.page.views.append(views.Password(self.page, self.db))
-            #
-            # case "/register":
-            #     self.page.views.append(views.Register(self.page, self.db))
-
             case "/":
                 self.page.views.append(HomePage(page=self.page))
 
             case "/session":
                 self.page.views.append(SessionMode(page=self.page))
-            #
-            # case "/delete":
-            #     self.page.views.append(views.Delete(self.page, self.db))
-            #
-            # case "/update":
-            #     self.page.views.append(views.Update(self.page, self.db))
-            #
+
+            case route if route.startswith("/session/chat"):
+                self.page.views.append(ChatPage(page=self.page))
+
+            case "/register":
+                self.page.views.append(RegisterPage(self.page))
+
+            case "/login":
+                self.page.views.append(LoginPage(self.page))
+
+            case "/forgot-password":
+                self.page.views.append(RestorePassword(self.page))
+
+            case route if route.startswith("/confirm-email"):
+                self.page.views.append(ConfirmEmailPage(self.page))
+
+            case route if route.startswith("/auth/callback"):
+                self.page.views.append(AuthCallbackPage(self.page))
+
             # case "/settings":
             #     self.page.views.append(views.Settings(self.page))
-            #
-            # case _:
-            #     self.page.views.append(views.NotFoundPage(self.page))
+
+            case _:
+                self.page.views.append(PageNotFound(self.page))
 
         self.page.update()
 

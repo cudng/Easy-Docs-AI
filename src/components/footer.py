@@ -14,7 +14,7 @@ class Footer(ft.Container):
                     # ── Divider ──
                     ft.Divider(color=ft.Colors.OUTLINE_VARIANT, height=30),
                     # ── Bottom bar: copyright ──
-                    ft.Row(
+                    ft.ResponsiveRow(
                         [
                             ft.Row(
                                 [
@@ -34,14 +34,29 @@ class Footer(ft.Container):
                                     ),
                                 ],
                                 spacing=8,
+                                col={
+                                    ft.ResponsiveRowBreakpoint.XS: 12,
+                                    ft.ResponsiveRowBreakpoint.MD: 8,
+                                    ft.ResponsiveRowBreakpoint.LG: 4,
+                                },
                             ),
-                            ft.Text(
-                                "© 2026 Easy Docs AI. All rights reserved.",
-                                style=ft.TextStyle(
-                                    size=12,
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                    font_family=Config.FONT,
-                                ),
+                            ft.Row(
+                                [
+                                    ft.Text(
+                                        "© 2026 Easy Docs AI. All rights reserved.",
+                                        style=ft.TextStyle(
+                                            size=14,
+                                            color=ft.Colors.ON_SURFACE_VARIANT,
+                                            font_family=Config.FONT,
+                                        ),
+                                    ),
+                                ],
+                                col={
+                                    ft.ResponsiveRowBreakpoint.XS: 12,
+                                    ft.ResponsiveRowBreakpoint.MD: 8,
+                                    ft.ResponsiveRowBreakpoint.LG: 4,
+                                },
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                             ft.Row(
                                 [
@@ -83,9 +98,15 @@ class Footer(ft.Container):
                                     ),
                                 ],
                                 spacing=0,
+                                col={
+                                    ft.ResponsiveRowBreakpoint.XS: 12,
+                                    ft.ResponsiveRowBreakpoint.MD: 8,
+                                    ft.ResponsiveRowBreakpoint.LG: 4,
+                                },
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                 ],
                 spacing=20,

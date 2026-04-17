@@ -1,7 +1,7 @@
 import flet as ft
 
 from components import Appbar, Footer, Hero, HowItWork, Modes
-from utils import Responsive
+from utils import Responsive, get_user
 
 
 class HomePage(ft.View):
@@ -19,7 +19,12 @@ class HomePage(ft.View):
         )
         self.right_divider = ft.VerticalDivider(self.right_margin)
 
-        self.appbar: Appbar = Appbar(page, self.font_size, self.switch_theme)
+        user = get_user(page)
+        self.appbar: Appbar = Appbar(
+            page,
+            self.font_size,
+            user_email=user["email"] if user else None,
+        )
         self.hero = Hero(self.font_size)
         self.how_it_work = HowItWork()
         self.modes = Modes()

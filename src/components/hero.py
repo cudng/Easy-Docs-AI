@@ -1,13 +1,13 @@
 import flet as ft
 import flet.canvas as cv
 
-from utils import Config
+from utils import Config, supabase
 
 from . import ChatMock
 
 
 class Hero(ft.ResponsiveRow):
-    def __init__(self, font_size: int):
+    def __init__(self, font_size: int, logged: bool = False):
         super().__init__(
             alignment=ft.MainAxisAlignment.CENTER,
             expand=True,
@@ -16,6 +16,7 @@ class Hero(ft.ResponsiveRow):
             run_spacing=10,
         )
 
+        self.logged = True
         self.font_size = font_size
         self.span_y = font_size * 1.1
         self.title_y = 0
@@ -67,13 +68,22 @@ class Hero(ft.ResponsiveRow):
                                 bgcolor="#13DAEC",
                                 on_click=self.go_to_session,
                             ),
-                            ft.Button(
-                                "Login to Save History",
-                                height=40,
-                                margin=ft.Margin.only(top=10),
-                                style=ft.ButtonStyle(
-                                    shape=ft.ContinuousRectangleBorder(radius=10)
-                                ),
+                            *(
+                                [
+                                    ft.Button(
+                                        "Login to Save History",
+                                        height=40,
+                                        margin=ft.Margin.only(top=10),
+                                        style=ft.ButtonStyle(
+                                            shape=ft.ContinuousRectangleBorder(
+                                                radius=10
+                                            )
+                                        ),
+                                        on_click=self.login,
+                                    ),
+                                ]
+                                if not self.logged
+                                else []
                             ),
                         ]
                     ),
@@ -198,3 +208,6 @@ class Hero(ft.ResponsiveRow):
 
     async def go_to_session(self):
         await self.page.push_route("/session")
+
+    async def login(self):
+        await self.page.push_route("/login")

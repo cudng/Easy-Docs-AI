@@ -32,7 +32,7 @@ class Responsive:
 
     @staticmethod
     def crossed_breakpoint(w: int) -> bool:
-        """Returns True only if user switched between mobile/tablet/desktop."""
+        """Returns True only if a user switched between mobile/tablet/desktop."""
         new_breakpoint = Responsive.screen(w)
 
         if Responsive._last_breakpoint is None:
