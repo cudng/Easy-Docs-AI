@@ -153,7 +153,7 @@ class ConfirmEmailPage(ft.View):
         self.feedback_text.update()
 
     # ── Resend ──────────────────────────────────────────────────────
-    def _on_resend(self, e=None):
+    def _on_resend(self):
         if self._cooldown_remaining > 0:
             return
         if not self.email:
@@ -190,11 +190,11 @@ class ConfirmEmailPage(ft.View):
         self.resend_btn.update()
 
     # ── Navigation ──────────────────────────────────────────────────
-    def _on_go_home(self, e=None):
+    def _on_go_home(self):
         self.page_ref.run_task(self._go_home)
 
     async def _go_home(self):
         await self.page_ref.push_route("/")
 
-    async def _go_login(self, e=None):
+    async def _go_login(self):
         await self.page_ref.push_route("/login")

@@ -104,7 +104,7 @@ class Style:
                 weight=ft.FontWeight.W_700,
                 font_family=Config.FONT,
                 size=20,
-                color="#13DAEC",
+                color="#13DAEC",  # noqa
             ),
         }
 

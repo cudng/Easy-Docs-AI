@@ -88,10 +88,16 @@ class AuthCallbackPage(ft.View):
         code = params.get("code")
         token_hash = params.get("token_hash")
         otp_type = params.get("type")
+        access_token = params.get("access_token")
+        refresh_token = params.get("refresh_token")
+        next_route = params.get("next") or "/"
+        is_recovery = otp_type == "recovery" or next_route == "/reset-password"
 
         try:
             if code:
                 response = supabase.auth.exchange_code_for_session({"auth_code": code})
+            elif access_token and refresh_token:
+                response = supabase.auth.set_session(access_token, refresh_token)
             elif token_hash and otp_type:
                 response = supabase.auth.verify_otp(
                     {"token_hash": token_hash, "type": otp_type}
@@ -104,15 +110,31 @@ class AuthCallbackPage(ft.View):
                 )
                 return
         except Exception as err:
-            self._show_error(
-                f"We couldn't confirm your email: {err}",
-                action_label="Back to Sign Up",
-                route="/register",
-            )
+            if is_recovery:
+                self._show_error(
+                    f"We couldn't verify your reset link: {err}",
+                    action_label="Request New Link",
+                    route="/forgot-password",
+                )
+            else:
+                self._show_error(
+                    f"We couldn't confirm your email: {err}",
+                    action_label="Back to Sign Up",
+                    route="/register",
+                )
+            return
+
+        if is_recovery:
+            self._show_recovery_success()
+            await self.page_ref.push_route("/reset-password")
             return
 
         if response.session:
             await save_session(response)
+            self.page_ref.session.store.set(
+                "user",
+                {"user_id": response.user.id, "email": response.user.email},
+            )
 
         self._show_success()
         await self.page_ref.push_route("/")
@@ -122,6 +144,12 @@ class AuthCallbackPage(ft.View):
         self.status_icon.visible = False
         self.title_text.value = "Email confirmed!"
         self.subtitle_text.value = "Taking you to your dashboard…"
+        self.form_card.update()
+
+    def _show_recovery_success(self):
+        self.status_icon.visible = False
+        self.title_text.value = "Reset link verified"
+        self.subtitle_text.value = "Taking you to set a new password…"
         self.form_card.update()
 
     def _show_error(self, msg: str, action_label: str, route: str):

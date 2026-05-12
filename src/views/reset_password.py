@@ -1,9 +1,9 @@
 import flet as ft
 
-from utils import Config, Responsive, Style, app_redirect_url, supabase
+from utils import Config, Responsive, Style, supabase
 
 
-class RestorePassword(ft.View):
+class ResetPassword(ft.View):
     def __init__(self, page: ft.Page):
         super().__init__(padding=0, route=page.route)
         self.page_ref = page
@@ -11,12 +11,23 @@ class RestorePassword(ft.View):
         self.responsive = Responsive()
 
         # ── Form fields ─────────────────────────────────────────────
-        self.email_field = ft.TextField(
+        self.password_field = ft.TextField(
             **Style.auth_field(),
-            label="Email",
-            hint_text="you@example.com",
-            prefix_icon=ft.Icon(ft.Icons.EMAIL_OUTLINED, color=Config.PRIMARY),
-            keyboard_type=ft.KeyboardType.EMAIL,
+            label="New Password",
+            hint_text="Enter a new password",
+            prefix_icon=ft.Icon(ft.Icons.LOCK_OUTLINE, color=Config.PRIMARY),
+            password=True,
+            can_reveal_password=True,
+            on_change=self._clear_error,
+        )
+
+        self.confirm_password_field = ft.TextField(
+            **Style.auth_field(),
+            label="Confirm Password",
+            hint_text="Repeat the new password",
+            prefix_icon=ft.Icon(ft.Icons.LOCK_OUTLINE, color=Config.PRIMARY),
+            password=True,
+            can_reveal_password=True,
             on_submit=self._on_submit,
             on_change=self._clear_error,
         )
@@ -38,7 +49,7 @@ class RestorePassword(ft.View):
         )
 
         self.submit_btn = ft.Button(
-            "Send Reset Link",
+            "Update Password",
             bgcolor=Config.PRIMARY,
             color=ft.Colors.WHITE,
             style=ft.ButtonStyle(
@@ -58,66 +69,30 @@ class RestorePassword(ft.View):
                 border_radius=16,
                 content=ft.Column(
                     [
-                        ft.Row(
-                            [
-                                ft.TextButton(
-                                    "Back to Sign In",
-                                    icon=ft.Icons.ARROW_BACK_ROUNDED,
-                                    style=ft.ButtonStyle(
-                                        color=Config.PRIMARY,
-                                        text_style=ft.TextStyle(
-                                            font_family=Config.FONT,
-                                        ),
-                                    ),
-                                    on_click=self._go_login,
-                                ),
-                            ],
-                        ),
                         ft.Icon(
                             ft.Icons.LOCK_RESET_ROUNDED,
                             size=60,
                             color=Config.PRIMARY,
                         ),
                         ft.Text(
-                            "Reset Password",
+                            "Set New Password",
                             size=20,
                             weight=ft.FontWeight.W_700,
                             font_family=Config.FONT,
                             text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Text(
-                            "Enter your email and we'll send you\na link to reset your password",
+                            "Enter and confirm your new password\nto regain access to your account",
                             size=14,
                             color=ft.Colors.OUTLINE,
                             font_family=Config.FONT,
                             text_align=ft.TextAlign.CENTER,
                         ),
-                        self.email_field,
+                        self.password_field,
+                        self.confirm_password_field,
                         self.error_text,
                         self.success_text,
                         self.submit_btn,
-                        ft.Row(
-                            [
-                                ft.Text(
-                                    "Remember your password?",
-                                    size=14,
-                                    color=ft.Colors.OUTLINE,
-                                    font_family=Config.FONT,
-                                ),
-                                ft.TextButton(
-                                    "Sign In",
-                                    style=ft.ButtonStyle(
-                                        color=Config.PRIMARY,
-                                        text_style=ft.TextStyle(
-                                            weight=ft.FontWeight.W_600,
-                                            font_family=Config.FONT,
-                                        ),
-                                    ),
-                                    on_click=self._go_login,
-                                ),
-                            ],
-                            alignment=ft.MainAxisAlignment.CENTER,
-                        ),
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=12,
@@ -135,29 +110,39 @@ class RestorePassword(ft.View):
             ),
         ]
 
-        page.on_resize = self._on_resize
-
     # ── Validation & submit ─────────────────────────────────────────
     def _on_submit(self, e=None):
-        email = (self.email_field.value or "").strip()
+        password = (self.password_field.value or "").strip()
+        confirm = (self.confirm_password_field.value or "").strip()
 
-        if not email:
-            self._show_error("Please enter your email")
+        if not password:
+            self._show_error("Please enter a new password")
+            return
+        if len(password) < 6:
+            self._show_error("Password must be at least 6 characters")
+            return
+        if password != confirm:
+            self._show_error("Passwords do not match")
             return
 
-        redirect_url = app_redirect_url(
-            self.page_ref, "/auth/callback?next=/reset-password"
-        )
         try:
-            supabase.auth.reset_password_for_email(
-                email,
-                {"redirect_to": redirect_url},
-            )
+            response = supabase.auth.update_user({"password": password})
         except Exception as err:
-            self._show_error(str(err))
+            msg = str(err)
+            if "Auth session missing" in msg or "session" in msg.lower():
+                self._show_error(
+                    "Recovery link expired or invalid. Please request a new reset link."
+                )
+            else:
+                self._show_error(msg)
             return
 
-        self._show_success("Password reset link has been sent to your email")
+        if not response.user:
+            self._show_error("Couldn't update password. Please try again.")
+            return
+
+        self._show_success("Password updated. Redirecting to sign in…")
+        self.page_ref.run_task(self._go_login)
 
     def _show_error(self, msg: str):
         self.success_text.visible = False
@@ -179,18 +164,9 @@ class RestorePassword(ft.View):
             self.error_text.update()
 
     # ── Navigation ──────────────────────────────────────────────────
-    async def _go_login(self, e=None):
+    async def _go_login(self):
+        try:
+            supabase.auth.sign_out()
+        except Exception:
+            pass
         await self.page_ref.push_route("/login")
-
-    # ── Responsive ──────────────────────────────────────────────────
-    def _on_resize(self, e=None):
-        width = self.page_ref.width
-
-        if width < 480:
-            card_w = width * 0.92
-            btn_w = card_w - 80
-            self.form_card.content.width = card_w
-            self.submit_btn.width = btn_w
-        else:
-            self.form_card.content.width = 400
-            self.submit_btn.width = 400

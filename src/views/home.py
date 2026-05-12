@@ -58,7 +58,7 @@ class HomePage(ft.View):
             else ft.Icons.DARK_MODE
         )
 
-    def on_resize(self, e):
+    def on_resize(self):
         width = self.page.width
 
         if Responsive.crossed_breakpoint(width):

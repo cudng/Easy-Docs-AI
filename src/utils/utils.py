@@ -1,6 +1,21 @@
 from enum import Enum
 
+import flet as ft
+
 from utils import Config
+
+
+def app_redirect_url(page: ft.Page, path: str = "") -> str:
+    """Build an HTTP(S) URL from page.url, which Flet returns as ws(s)://.
+
+    `path` should start with "/" if non-empty (e.g. "/auth/callback").
+    """
+    raw = (page.url or "").rstrip("/")
+    if raw.startswith("ws://"):
+        raw = "http://" + raw[len("ws://") :]
+    elif raw.startswith("wss://"):
+        raw = "https://" + raw[len("wss://") :]
+    return f"{raw}{path}"
 
 
 class Breakpoint:

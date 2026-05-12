@@ -35,7 +35,7 @@ async def clear_session(page: ft.Page | None = None):
     """Sign out of Supabase, wipe cached session and in-memory user."""
     try:
         supabase.auth.sign_out()
-    except Exception:
+    except Exception:  # noqa
         pass
     await ft.SharedPreferences().remove(SESSION_KEY)
     if page is not None:

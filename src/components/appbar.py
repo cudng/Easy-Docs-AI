@@ -73,10 +73,15 @@ class Appbar(ft.AppBar):
 
     async def _sign_out(self):
         await clear_session(self.ref_page)
-        await self.ref_page.push_route("/")
+        if self.ref_page.route == "/":
+            handler = self.ref_page.on_route_change
+            if handler:
+                handler()
+        else:
+            await self.ref_page.push_route("/")
 
     def update_margin(self, w: int):
-        self.leading.controls[0].margin.left = w
+        self.leading.controls[0].margin.left = w  # noqa
 
     # ── Theme toggle ────────────────────────────────────────────────
     def _switch_theme(self, e):
@@ -91,7 +96,7 @@ class Appbar(ft.AppBar):
             else ft.Icons.DARK_MODE
         )
 
-    def _toggle_sources(self, e=None):
+    def _toggle_sources(self):
         self.sources_shown = not self.sources_shown
         if self.sources_shown:
             self.sources_button.content = "Hide Sources"

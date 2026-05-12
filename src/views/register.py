@@ -1,8 +1,9 @@
+import re
 from urllib.parse import quote
 
 import flet as ft
 
-from utils import Config, Responsive, Style, supabase
+from utils import Config, Responsive, Style, app_redirect_url, supabase
 
 
 class RegisterPage(ft.View):
@@ -158,7 +159,7 @@ class RegisterPage(ft.View):
         # page.on_resize = self._on_resize
 
     # ── Validation & submit ─────────────────────────────────────────
-    def _on_register(self, e=None):
+    def _on_register(self):
         name = (self.name_field.value or "").strip()
         email = (self.email_field.value or "").strip()
         password = (self.password_field.value or "").strip()
@@ -173,14 +174,20 @@ class RegisterPage(ft.View):
         if not password:
             self._show_error("Please enter a password")
             return
-        if len(password) < 6:
-            self._show_error("Password must be at least 6 characters")
+        if len(password) < 8:
+            self._show_error("Password must be at least 8 characters")
+            return
+        if not re.search(r"[A-Z]", password):
+            self._show_error("Password must contain at least one uppercase letter")
+            return
+        if not re.search(r"\d", password):
+            self._show_error("Password must contain at least one number")
             return
         if password != confirm:
             self._show_error("Passwords do not match")
             return
 
-        redirect_url = f"{(self.page_ref.url or '').rstrip('/')}/auth/callback"
+        redirect_url = app_redirect_url(self.page_ref, "/auth/callback")
         try:
             response = supabase.auth.sign_up(
                 {
@@ -205,21 +212,41 @@ class RegisterPage(ft.View):
         else:
             self.page_ref.run_task(self._go_home)
 
-    def _on_google_register(self, e=None):
-        self.page_ref.run_task(self._go_home)
+    def _on_google_register(self):
+        self.page_ref.run_task(self._google_oauth)
+
+    async def _google_oauth(self):
+        redirect_url = app_redirect_url(self.page_ref, "/auth/callback")
+
+        try:
+            response = supabase.auth.sign_in_with_oauth(
+                {
+                    "provider": "google",
+                    "options": {"redirect_to": redirect_url},
+                }
+            )
+        except Exception as err:
+            self._show_error(str(err))
+            return
+
+        if not response.url:
+            self._show_error("Couldn't start Google sign-in.")
+            return
+
+        await ft.UrlLauncher().launch_url(response.url, web_only_window_name="_self")
 
     def _show_error(self, msg: str):
         self.error_text.value = msg
         self.error_text.visible = True
         self.error_text.update()
 
-    def _clear_error(self, e=None):
+    def _clear_error(self):
         if self.error_text.visible:
             self.error_text.visible = False
             self.error_text.update()
 
     # ── Navigation ──────────────────────────────────────────────────
-    def _on_go_home(self, e=None):
+    def _on_go_home(self):
         self.page_ref.run_task(self._go_home)
 
     async def _go_home(self):
@@ -228,5 +255,5 @@ class RegisterPage(ft.View):
     async def _go_confirm_email(self, email: str):
         await self.page_ref.push_route(f"/confirm-email?email={quote(email)}")
 
-    async def _go_login(self, e=None):
+    async def _go_login(self):
         await self.page_ref.push_route("/login")

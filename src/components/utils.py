@@ -116,7 +116,7 @@ class AccountMenu(ft.Container):
             ),
         )
 
-        # Transparent layer that closes the dropdown on outside click
+        # Transparent layer that closes the dropdown on the outside click
         self.backdrop = ft.Container(
             visible=False,
             expand=True,
@@ -124,7 +124,7 @@ class AccountMenu(ft.Container):
             bgcolor=ft.Colors.TRANSPARENT,
         )
 
-        # Register overlay controls once
+        # Register overlay controls at once
         page.overlay.append(self.backdrop)
         page.overlay.append(self.dropdown)
 
@@ -134,13 +134,13 @@ class AccountMenu(ft.Container):
         )
 
     # ── Interaction ─────────────────────────────────────────────────
-    def _toggle(self, e=None):
+    def _toggle(self):
         self.is_open = not self.is_open
         self.dropdown.visible = self.is_open
         self.backdrop.visible = self.is_open
         self.page_ref.update()
 
-    def _close(self, e=None):
+    def _close(self):
         self.is_open = False
         self.dropdown.visible = False
         self.backdrop.visible = False
@@ -155,35 +155,4 @@ class AccountMenu(ft.Container):
         e.control.bgcolor = (
             ft.Colors.with_opacity(0.08, Config.ERROR) if e.data == "true" else None
         )
-        e.control.update()
-
-
-# class LeftDivider(ft.Container):
-#     def did_mount(self):
-#         self.width = self._get_thickness()
-#         self.bgcolor = ft.Colors.GREY_300
-#         self.page.on_resize = self._on_resize
-#         self.update()
-#
-#     def _get_thickness(self):
-#         if self.page.width < 600:
-#             return 20
-#         elif self.page.width < 1200:
-#             return 50
-#         return 100
-#
-#     def _on_resize(self, e):
-#         self.width = self._get_thickness()
-#         self.update()
-#
-#
-# # utils.py
-# def register_resize(page: ft.Page, callback):
-#     existing = page.on_resize
-#
-#     def handler(e):
-#         if existing:
-#             existing(e)
-#         callback(e)
-#
-#     page.on_resize = handler
+        self.update()

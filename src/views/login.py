@@ -1,6 +1,6 @@
 import flet as ft
 
-from utils import Config, Responsive, Style, save_session, supabase
+from utils import Config, Responsive, Style, app_redirect_url, save_session, supabase
 
 
 class LoginPage(ft.View):
@@ -226,7 +226,29 @@ class LoginPage(ft.View):
         await self.page_ref.push_route("/")
 
     def _on_google_login(self):
-        self.page_ref.run_task(self._go_home)
+        self.page_ref.run_task(self._google_oauth)
+
+    async def _google_oauth(self):
+        redirect_url = app_redirect_url(self.page_ref, "/auth/callback")
+
+        try:
+            response = supabase.auth.sign_in_with_oauth(
+                {
+                    "provider": "google",
+                    "options": {"redirect_to": redirect_url},
+                }
+            )
+        except Exception as err:
+            self._show_error(str(err))
+            return
+
+        if not response.url:
+            self._show_error("Couldn't start Google sign-in.")
+            return
+
+        await ft.UrlLauncher().launch_url(
+            response.url, web_only_window_name="_self"
+        )
 
     def _show_error(self, msg: str):
         self.error_text.value = msg

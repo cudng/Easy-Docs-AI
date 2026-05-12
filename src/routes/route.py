@@ -1,5 +1,3 @@
-import asyncio
-
 import flet as ft
 
 from views import (
@@ -10,6 +8,7 @@ from views import (
     LoginPage,
     PageNotFound,
     RegisterPage,
+    ResetPassword,
     RestorePassword,
     SessionMode,
 )
@@ -20,7 +19,7 @@ class RouteHandler:
         self.page = page
         # self.db = db
 
-    def route(self, e=None):
+    def route(self):
         """Called directly on the startup or passed to page.on_route_change."""
         self.page.views.clear()
 
@@ -42,6 +41,9 @@ class RouteHandler:
 
             case "/forgot-password":
                 self.page.views.append(RestorePassword(self.page))
+
+            case "/reset-password":
+                self.page.views.append(ResetPassword(self.page))
 
             case route if route.startswith("/confirm-email"):
                 self.page.views.append(ConfirmEmailPage(self.page))
