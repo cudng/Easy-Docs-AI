@@ -60,9 +60,8 @@ class UserMessage(ft.Container):
 
 
 class AiMessage(ft.Container):
-    def __init__(self, text: str, sources_visible: bool = False):
+    def __init__(self, text: str):
         super().__init__(padding=ft.Padding.only(right=60))
-        self.sources_visible = sources_visible
 
         self.action_buttons = ft.Row(
             controls=[
@@ -174,8 +173,6 @@ class AiMessage(ft.Container):
             border_radius=12,
             bgcolor=ft.Colors.SURFACE,
             width=400,
-            visible=self.sources_visible,
-            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT),
         )
 
         self.content = ft.Row(
@@ -238,12 +235,6 @@ class AiMessage(ft.Container):
             ],
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
-
-    def set_sources_visible(self, visible: bool):
-        self.sources_visible = visible
-        self.source_container.visible = visible
-        self.source_container.update()
-
 
 class Loading(ft.Container):
     def __init__(self):

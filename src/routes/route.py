@@ -10,7 +10,6 @@ from views import (
     RegisterPage,
     ResetPassword,
     RestorePassword,
-    SessionMode,
 )
 
 
@@ -27,10 +26,7 @@ class RouteHandler:
             case "/":
                 self.page.views.append(HomePage(page=self.page))
 
-            case "/session":
-                self.page.views.append(SessionMode(page=self.page))
-
-            case route if route.startswith("/session/chat"):
+            case route if route.startswith("/chat"):
                 self.page.views.append(ChatPage(page=self.page))
 
             case "/register":

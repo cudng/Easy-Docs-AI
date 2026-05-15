@@ -1,6 +1,5 @@
 import flet as ft
 
-from components.utils import AccountMenu
 from utils import Config, Style, clear_session
 
 
@@ -9,35 +8,73 @@ class Appbar(ft.AppBar):
         self,
         page,
         margin_left: int,
-        filename=None,
-        on_toggle_sources=None,
-        chat_mode=False,
         user_email: str | None = None,
+        documents: list[str] | None = None,
+        on_menu_click=None,
+        show_menu_icon: bool = False,
     ):
         self.ref_page = page
-        self.sources_shown = False
         self.user_email = user_email
-        self.filename = filename
-        self.on_toggle_sources = on_toggle_sources
-        self.sources_button = (
-            ft.Button(
-                **Style.resources_visibility_toggle(),
-                on_click=self._toggle_sources,
-            )
-            if chat_mode
-            else None
+        self.documents = documents or []
+        self.on_menu_click = on_menu_click
+
+        self.menu_icon = ft.IconButton(
+            icon=ft.Icons.MENU,
+            tooltip="Toggle chats",
+            icon_color=Config.PRIMARY,
+            on_click=self._on_menu_click,
+            visible=show_menu_icon,
         )
 
-        self.account_control = (
-            AccountMenu(page, user_email, on_sign_out=self._on_sign_out)
-            if user_email
-            else ft.Button(**Style.login_button(), on_click=self.login)
+        actions: list[ft.Control] = []
+        if self.documents:
+            actions.append(
+                ft.Container(
+                    margin=ft.Margin.only(right=4),
+                    content=ft.PopupMenuButton(
+                        content=ft.Container(
+                            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                            border_radius=8,
+                            content=ft.Row(
+                                [
+                                    ft.Icon(
+                                        ft.Icons.FOLDER_OPEN,
+                                        size=18,
+                                        color=Config.PRIMARY,
+                                    ),
+                                    ft.Text(
+                                        f"Documents ({len(self.documents)})",
+                                        size=14,
+                                        weight=ft.FontWeight.W_500,
+                                        font_family=Config.FONT,
+                                    ),
+                                ],
+                                spacing=8,
+                                tight=True,
+                            ),
+                        ),
+                        tooltip="Selected documents",
+                        items=self._build_document_items(),
+                    ),
+                ),
+            )
+        actions.append(
+            ft.Container(
+                margin=ft.Margin.only(right=20),
+                content=ft.PopupMenuButton(
+                    icon=ft.Icons.MENU,
+                    tooltip="Menu",
+                    items=self._build_menu_items(),
+                    icon_color=Config.PRIMARY,
+                ),
+            ),
         )
 
         super().__init__(
             leading_width=275,
             leading=ft.Row(
                 [
+                    self.menu_icon,
                     ft.Container(
                         content=ft.Image(Config.SVG, color="#13DAEC"),  # noqa
                         padding=ft.Padding.only(top=10, bottom=10),
@@ -51,22 +88,121 @@ class Appbar(ft.AppBar):
                 ],
             ),
             toolbar_height=60,
-            title=ft.Text(filename),
+            title=None,
             center_title=True,
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
-            actions=[
-                ft.IconButton(
-                    icon=ft.Icons.LIGHT_MODE
-                    if page.theme_mode == ft.ThemeMode.DARK
-                    else ft.Icons.DARK_MODE,
-                    tooltip="Theme",
-                    margin=ft.Margin.only(right=20),
-                    on_click=lambda e: self._switch_theme(e),
-                ),
-                *([self.sources_button] if chat_mode else []),
-                self.account_control,
-            ],
+            actions=actions,
         )
+
+    # ── Document items ──────────────────────────────────────────────
+    DOC_ITEM_WIDTH = 280
+
+    def _build_document_items(self):
+        items: list[ft.PopupMenuItem] = []
+        for name in self.documents:
+            items.append(
+                ft.PopupMenuItem(
+                    content=ft.Container(
+                        width=self.DOC_ITEM_WIDTH,
+                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                        content=ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.INSERT_DRIVE_FILE_OUTLINED,
+                                    size=18,
+                                    color=ft.Colors.OUTLINE,
+                                ),
+                                ft.Text(
+                                    name,
+                                    size=13,
+                                    font_family=Config.FONT,
+                                    max_lines=1,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                    expand=True,
+                                    tooltip=name,
+                                ),
+                            ],
+                            spacing=10,
+                            tight=True,
+                        ),
+                    ),
+                    on_click=lambda _e: None,
+                )
+            )
+        return items
+
+    # ── Menu items ──────────────────────────────────────────────────
+    def _build_menu_items(self):
+        items: list[ft.PopupMenuItem] = []
+
+        if self.user_email:
+            items.append(
+                ft.PopupMenuItem(
+                    content=ft.Container(
+                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    "Signed in as",
+                                    size=11,
+                                    color=ft.Colors.OUTLINE,
+                                    font_family=Config.FONT,
+                                ),
+                                ft.Text(
+                                    self.user_email,
+                                    size=13,
+                                    color=Config.TEAL,
+                                    weight=ft.FontWeight.W_600,
+                                    font_family=Config.FONT,
+                                    max_lines=1,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                ),
+                            ],
+                            spacing=2,
+                            tight=True,
+                        ),
+                    ),
+                    on_click=lambda _e: None,
+                )
+            )
+            items.append(ft.PopupMenuItem())  # divider
+
+        is_dark = self.ref_page.theme_mode == ft.ThemeMode.DARK
+        items.append(
+            ft.PopupMenuItem(
+                "Light theme" if is_dark else "Dark theme",
+                icon=ft.Icons.LIGHT_MODE if is_dark else ft.Icons.DARK_MODE,
+                on_click=self._switch_theme,
+            )
+        )
+
+        items.append(ft.PopupMenuItem())  # divider
+
+        if self.user_email:
+            items.append(
+                ft.PopupMenuItem(
+                    "Sign out",
+                    icon=ft.Icons.LOGOUT,
+                    on_click=self._on_sign_out,
+                )
+            )
+        else:
+            items.append(
+                ft.PopupMenuItem(
+                    "Sign in",
+                    icon=ft.Icons.LOGIN,
+                    on_click=self._on_sign_in,
+                )
+            )
+
+        return items
+
+    # ── Sign in / out ───────────────────────────────────────────────
+    def _on_sign_in(self, e=None):
+        self.ref_page.run_task(self._sign_in)
+
+    async def _sign_in(self):
+        await self.ref_page.push_route("/login")
 
     def _on_sign_out(self, e=None):
         self.ref_page.run_task(self._sign_out)
@@ -80,36 +216,28 @@ class Appbar(ft.AppBar):
         else:
             await self.ref_page.push_route("/")
 
-    def update_margin(self, w: int):
-        self.leading.controls[0].margin.left = w  # noqa
+    # ── Menu toggle ─────────────────────────────────────────────────
+    def _on_menu_click(self, e=None):
+        if self.on_menu_click is not None:
+            self.on_menu_click(e)
 
-    # ── Theme toggle ────────────────────────────────────────────────
-    def _switch_theme(self, e):
-        self.page.theme_mode = (
+    def set_menu_visible(self, visible: bool):
+        self.menu_icon.visible = visible
+
+    # ── Misc ────────────────────────────────────────────────────────
+    def update_margin(self, w: int):
+        # leading row is [menu_icon, logo_container, name_container]
+        self.leading.controls[1].margin.left = w  # noqa
+
+    def _switch_theme(self, e=None):
+        self.ref_page.theme_mode = (
             ft.ThemeMode.DARK
-            if self.page.theme_mode == ft.ThemeMode.LIGHT
+            if self.ref_page.theme_mode == ft.ThemeMode.LIGHT
             else ft.ThemeMode.LIGHT
         )
-        e.control.icon = (
-            ft.Icons.LIGHT_MODE
-            if self.page.theme_mode == ft.ThemeMode.DARK
-            else ft.Icons.DARK_MODE
-        )
-
-    def _toggle_sources(self):
-        self.sources_shown = not self.sources_shown
-        if self.sources_shown:
-            self.sources_button.content = "Hide Sources"
-            self.sources_button.icon = ft.Icons.VISIBILITY_OFF
-        else:
-            self.sources_button.content = "Show Sources"
-            self.sources_button.icon = ft.Icons.VISIBILITY
-        self.sources_button.update()
-        if self.on_toggle_sources:
-            self.on_toggle_sources(self.sources_shown)
+        # Rebuild items so the theme label/icon flips on next open
+        self.actions[0].content.items = self._build_menu_items()
+        self.ref_page.update()
 
     async def go_home(self):
         await self.ref_page.push_route("/")
-
-    async def login(self):
-        await self.ref_page.push_route("/login")

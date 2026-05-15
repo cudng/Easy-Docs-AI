@@ -6,13 +6,12 @@ from utils import Config
 
 
 def app_redirect_url(page: ft.Page, path: str = "") -> str:
-    """Build an HTTP(S) URL from page.url, which Flet returns as ws(s)://.
-
+    """Build an HTTP (S) URL from page.url, which Flet returns as ws(s)://.
     `path` should start with "/" if non-empty (e.g. "/auth/callback").
     """
     raw = (page.url or "").rstrip("/")
     if raw.startswith("ws://"):
-        raw = "http://" + raw[len("ws://") :]
+        raw = "http://" + raw[len("ws://") :]  # noqa
     elif raw.startswith("wss://"):
         raw = "https://" + raw[len("wss://") :]
     return f"{raw}{path}"
@@ -34,7 +33,7 @@ class Responsive:
     _last_breakpoint: ScreenSize | None = None
 
     @staticmethod
-    def screen(w: int) -> ScreenSize:
+    def screen(w: int | float) -> ScreenSize:
         if w <= 0:
             raise ValueError("Width must be positive")
 
@@ -46,7 +45,7 @@ class Responsive:
             return ScreenSize.DESKTOP
 
     @staticmethod
-    def crossed_breakpoint(w: int) -> bool:
+    def crossed_breakpoint(w: int | float) -> bool:
         """Returns True only if a user switched between mobile/tablet/desktop."""
         new_breakpoint = Responsive.screen(w)
 

@@ -7,4 +7,3 @@ from .notfound import PageNotFound
 from .register import RegisterPage
 from .reset_password import ResetPassword
 from .restore_password import RestorePassword
-from .session import SessionMode

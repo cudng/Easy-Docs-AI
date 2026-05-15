@@ -1,11 +1,21 @@
-import time
+import asyncio
+import uuid
 
 import flet as ft
 
-from components import Appbar
+from components import Appbar, ChatDrawer, UploadCard
 from components.chat import AiMessage, Loading, UserMessage
 from components.utils import create_placeholder
-from utils import Config, Responsive, Style
+from utils import (
+    Responsive,
+    Style,
+    get_chat_documents,
+    get_messages,
+    get_user,
+    insert_message,
+    update_chat_title,
+)
+from utils.utils import Breakpoint
 
 
 class ChatPage(ft.View):
@@ -13,52 +23,92 @@ class ChatPage(ft.View):
         super().__init__(padding=0, route=page.route)
         self.page_ref = page
 
-        # Extract doc_id from the route: /session/chat/<doc_id>
-        route_parts = self.page_ref.route.split("/")
-        self.doc_id = route_parts[-1] if len(route_parts) > 3 else "default"
+        user = get_user(page)
+        self.is_logged_in = user is not None
 
-        self.uploaded_file = self.page_ref.session.store.get(
-            f"uploaded_file_{self.doc_id}"
+        # Routes: /chat or /chat/<chat_id>
+        route_parts = page.route.split("/")
+        raw_chat_id = (
+            route_parts[2] if len(route_parts) > 2 and route_parts[2] else None
         )
-
-        if not self.uploaded_file:
-            self._build_no_document_view()
-            return
-
-        self.filename = self.uploaded_file.split("/")[-1]
+        if raw_chat_id is not None:
+            try:
+                self.chat_id: str | None = str(uuid.UUID(raw_chat_id))
+            except (ValueError, TypeError):
+                self.controls = []
+                page.run_task(self._redirect_to_root)
+                return
+        else:
+            self.chat_id = None
 
         self.config = Responsive().get_size()
         self.left_margin = self.config["left_margin"]
         self.list_padding = self.config["list_padding"]
-        self.sources_visible = True
+
+        self.uploaded_files: list[str] = []
+        self.chat_history_data: list[dict] = []
+
+        if self.chat_id is not None:
+            if self.is_logged_in:
+                try:
+                    doc_rows = get_chat_documents(self.chat_id)
+                    self.uploaded_files = [d["file_name"] for d in doc_rows]
+                    db_messages = get_messages(self.chat_id)
+                    self.chat_history_data = [
+                        {"sender": m["sender"], "content": m["content"]}
+                        for m in db_messages
+                    ]
+                except Exception as err:
+                    print(f"Error fetching chat data: {err}")
+                    self.uploaded_files = []
+                    self.chat_history_data = []
+            else:
+                self.uploaded_files = (
+                    self.page_ref.session.store.get(f"uploaded_files_{self.chat_id}")
+                    or []
+                )
+                self.chat_history_data = (
+                    self.page_ref.session.store.get(f"history_{self.chat_id}") or []
+                )
+
+            if (
+                not isinstance(self.uploaded_files, list)
+                or not self.uploaded_files
+                or not all(isinstance(x, str) for x in self.uploaded_files)
+            ):
+                self.controls = []
+                page.run_task(self._redirect_to_root)
+                return
+
+        is_narrow = (page.width or 1200) < Breakpoint.MOBILE_BREAKPOINT
+
         self.appbar: Appbar = Appbar(
-            page=self.page_ref,
-            filename=self.filename,
+            page=page,
             margin_left=self.left_margin,
-            on_toggle_sources=self._on_toggle_sources,
-            chat_mode=True,
-        )
-        # 1. State / Memory
-        self.chat_history_data = (
-            self.page_ref.session.store.get(f"history_{self.doc_id}") or []
+            user_email=user["email"] if user else None,
+            documents=self.uploaded_files,
+            on_menu_click=self._toggle_drawer,
+            show_menu_icon=is_narrow,
         )
 
-        # 2. Main Layout Components
-        self._build_chat_history()
-        self._build_input_area()
+        self.drawer = ChatDrawer(page, self.chat_id, self.is_logged_in)
+        self.drawer.visible = not is_narrow
 
-        # 3. Main Container
-        self.main_column = ft.Column(
-            controls=[
-                self.chat_listview,
-            ],
-            expand=True,
-            scroll=None,
-        )
-
-        # Build View controls
-        self.controls = [
-            ft.Container(
+        if self.chat_id is None:
+            self.upload_card: UploadCard | None = UploadCard(
+                page, on_chat_created=self._on_chat_created
+            )
+            right_pane = self.upload_card
+        else:
+            self.upload_card = None
+            self._build_chat_history()
+            self._build_input_area()
+            self.main_column = ft.Column(
+                controls=[self.chat_listview],
+                expand=True,
+                scroll=None,
+            )
+            right_pane = ft.Container(
                 content=ft.Stack(
                     [
                         self.main_column,
@@ -73,57 +123,41 @@ class ChatPage(ft.View):
                     expand=True,
                 ),
                 expand=True,
+            )
+
+        self.controls = [
+            ft.Row(
+                [
+                    self.drawer,
+                    ft.Container(content=right_pane, expand=True),
+                ],
+                expand=True,
+                spacing=0,
+                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
         ]
 
         page.on_resize = self._on_resize
 
-    # --- No Document Safeguard ---
-    def _build_no_document_view(self):
-        self.controls = [
-            ft.Container(
-                content=ft.Column(
-                    [
-                        ft.Icon(
-                            ft.Icons.DESCRIPTION_OUTLINED,
-                            size=64,
-                            color=ft.Colors.OUTLINE,
-                        ),
-                        ft.Text(
-                            "No document selected",
-                            size=20,
-                            weight=ft.FontWeight.W_600,
-                            color=ft.Colors.ON_SURFACE,
-                        ),
-                        ft.Text(
-                            "Please go back and choose a document first.",
-                            size=14,
-                            color=ft.Colors.OUTLINE,
-                        ),
-                        ft.Container(height=16),
-                        ft.Button(
-                            "Go Back",
-                            icon=ft.Icons.ARROW_BACK,
-                            bgcolor=Config.PRIMARY,
-                            color=ft.Colors.WHITE,
-                            style=ft.ButtonStyle(
-                                shape=ft.RoundedRectangleBorder(radius=8),
-                            ),
-                            on_click=lambda _: self.page_ref.go("/session"),
-                        ),
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    spacing=8,
-                ),
-                expand=True,
-                alignment=ft.Alignment.CENTER,
-            ),
-        ]
+    # --- Redirect / navigation helpers ---
+    async def _redirect_to_root(self):
+        self.page_ref.show_dialog(
+            ft.SnackBar(
+                content=ft.Text("Chat not found. Start a new chat."),
+            )
+        )
+        await self.page_ref.push_route("/chat")
 
-    # --- Chat History ---
+    async def _on_chat_created(self, chat_id: str):
+        await self.page_ref.push_route(f"/chat/{chat_id}")
+
+    # --- Drawer toggle (mobile hamburger) ---
+    def _toggle_drawer(self, _e=None):
+        self.drawer.visible = not self.drawer.visible
+        self.drawer.update()
+
+    # --- Chat history ---
     def _build_chat_history(self):
-        # We need padding at the bottom so the sticky input doesn't hide the last messages
         self.chat_listview = ft.ListView(
             **Style.chat_history(),
             padding=ft.Padding.only(
@@ -132,15 +166,12 @@ class ChatPage(ft.View):
         )
 
         for msg in self.chat_history_data:
-            if msg["role"] == "user":
+            if msg["sender"] == "user":
                 self.chat_listview.controls.append(UserMessage(msg["content"]))
+            elif msg["sender"] == "ai":
+                self.chat_listview.controls.append(AiMessage(msg["content"]))
 
-            elif msg["role"] == "ai":
-                self.chat_listview.controls.append(
-                    AiMessage(msg["content"], sources_visible=self.sources_visible)
-                )
-
-    # --- Input Area ---
+    # --- Input area ---
     def _build_input_area(self):
         self.send_icon = ft.IconButton(
             **Style.send_button_icon(),
@@ -194,14 +225,14 @@ class ChatPage(ft.View):
             ),
         )
 
-    # --- Input State ---
+    # --- Input state ---
     def _on_input_change(self):
         has_text = bool(self.input_field.value and not self.input_field.value.isspace())
         self.send_icon.disabled = not has_text
         self.send_icon.opacity = 1.0 if has_text else 0.4
         self.send_icon.update()
 
-    # --- Message Handling ---
+    # --- Message handling ---
     def _handle_send(self):
         text = self.input_field.value
         if not text or text.isspace():
@@ -213,48 +244,54 @@ class ChatPage(ft.View):
         self.input_field.update()
         self.send_icon.update()
 
-        # Add a user message
         self._add_user_message(text)
-
-        # Add loading state
         self._show_loading()
 
-        # Simulate AI processing (replace with actual RAG logic later)
         text_copy = text
 
-        def _process():
-            time.sleep(1.5)
+        async def _process():
+            await asyncio.sleep(1.5)
             self._remove_loading()
             self._add_ai_message(
                 f"This is a simulated response to: '{text_copy}'. Document processing logic will go here."
             )
 
-        import threading
-
-        threading.Thread(target=_process).start()
+        self.page_ref.run_task(_process)
 
     def _add_user_message(self, text: str):
         bubble = UserMessage(text)
         self.chat_listview.controls.append(bubble)
         self.chat_listview.update()
 
-        self.chat_history_data.append({"role": "user", "content": text})
-        self.page_ref.session.store.set(
-            f"history_{self.doc_id}", self.chat_history_data
-        )
+        is_first_message = len(self.chat_history_data) == 0
+        self.chat_history_data.append({"sender": "user", "content": text})
+
+        if self.is_logged_in:
+            if self.chat_id is not None:
+                insert_message(self.chat_id, "user", text)
+                if is_first_message:
+                    update_chat_title(self.chat_id, text[:75])
+        else:
+            self.page_ref.session.store.set(
+                f"history_{self.chat_id}", self.chat_history_data
+            )
 
     def _add_ai_message(self, text: str):
-        bubble = AiMessage(text, sources_visible=self.sources_visible)
+        bubble = AiMessage(text)
         self.chat_listview.controls.append(bubble)
         self.chat_listview.update()
 
-        self.chat_history_data.append({"role": "ai", "content": text})
-        self.page_ref.session.store.set(
-            f"history_{self.doc_id}", self.chat_history_data
-        )
+        self.chat_history_data.append({"sender": "ai", "content": text})
+
+        if self.is_logged_in:
+            if self.chat_id is not None:
+                insert_message(self.chat_id, "ai", text)
+        else:
+            self.page_ref.session.store.set(
+                f"history_{self.chat_id}", self.chat_history_data
+            )
 
     def _show_loading(self):
-        # Create 3 bouncing dots for loading animation
         self.loading_indicator = Loading()
         self.chat_listview.controls.append(self.loading_indicator)
         self.chat_listview.update()
@@ -267,14 +304,6 @@ class ChatPage(ft.View):
             self.chat_listview.controls.remove(self.loading_indicator)
             self.chat_listview.update()
 
-    # --- Sources Toggle ---
-    def _on_toggle_sources(self, visible: bool):
-        self.sources_visible = visible
-        for control in self.chat_listview.controls:
-            if isinstance(control, AiMessage):
-                control.set_sources_visible(visible)
-        self.chat_listview.update()
-
     # --- Responsive logic ---
     def _on_resize(self):
         width = self.page_ref.width
@@ -283,12 +312,20 @@ class ChatPage(ft.View):
             config = Responsive.get_size()
             padding = config["list_padding"]
             self.appbar.update_margin(config["left_margin"])
-            self.chat_listview.padding = ft.Padding.only(
-                top=32, bottom=160, left=padding, right=padding
-            )
+            if self.chat_id is not None:
+                self.chat_listview.padding = ft.Padding.only(
+                    top=32, bottom=160, left=padding, right=padding
+                )
+
+            is_narrow = (width or 1200) < Breakpoint.MOBILE_BREAKPOINT
+            self.drawer.visible = not is_narrow
+            self.appbar.set_menu_visible(is_narrow)
+            self.drawer.update()
+
+        if self.upload_card is not None:
+            self.upload_card.apply_responsive(width)
+            self.upload_card.update()
 
         self.appbar.update()
-        self.chat_listview.update()
-
-    async def go_back(self):
-        await self.page_ref.push_route("/session")
+        if self.chat_id is not None:
+            self.chat_listview.update()

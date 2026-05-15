@@ -207,7 +207,7 @@ class Hero(ft.ResponsiveRow):
         return [stroke, fill]
 
     async def go_to_session(self):
-        await self.page.push_route("/session")
+        await self.page.push_route("/chat")
 
     async def login(self):
         await self.page.push_route("/login")
