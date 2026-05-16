@@ -22,7 +22,6 @@ class HomePage(ft.View):
         user = get_user(page)
         self.appbar: Appbar = Appbar(
             page,
-            self.font_size,
             user_email=user["email"] if user else None,
         )
         self.hero = Hero(self.font_size)
@@ -60,18 +59,15 @@ class HomePage(ft.View):
 
     def on_resize(self):
         width = self.page.width
-
+        if not width:
+            return
         if Responsive.crossed_breakpoint(width):
             config = self.responsive.get_size()
 
             font_size = config["font_size"]
-            left_margin = config["left_margin"]
             right_margin = config["right_margin"]
             top_margin = config["top_margin"]
 
             self.right_divider.width = right_margin
             self.top_divider.height = top_margin
-            # self.left_divider.width = left_margin
             self.hero.rebuild_shapes(font_size)
-            self.appbar.update_margin(left_margin)
-            # self.page.update()

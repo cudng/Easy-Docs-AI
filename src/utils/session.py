@@ -38,5 +38,5 @@ async def clear_session(page: ft.Page | None = None):
     except Exception:  # noqa
         pass
     await ft.SharedPreferences().remove(SESSION_KEY)
-    if page is not None:
+    if page is not None and page.session.store.contains_key("user"):
         page.session.store.remove("user")

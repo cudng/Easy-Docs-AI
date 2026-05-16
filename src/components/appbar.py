@@ -7,11 +7,10 @@ class Appbar(ft.AppBar):
     def __init__(
         self,
         page,
-        margin_left: int,
         user_email: str | None = None,
         documents: list[str] | None = None,
         on_menu_click=None,
-        show_menu_icon: bool = False,
+        show: bool = False,
     ):
         self.ref_page = page
         self.user_email = user_email
@@ -19,150 +18,71 @@ class Appbar(ft.AppBar):
         self.on_menu_click = on_menu_click
 
         self.menu_icon = ft.IconButton(
-            icon=ft.Icons.MENU,
-            tooltip="Toggle chats",
-            icon_color=Config.PRIMARY,
+            **Style.menu_icon(show),
             on_click=self._on_menu_click,
-            visible=show_menu_icon,
         )
 
         actions: list[ft.Control] = []
         if self.documents:
             actions.append(
                 ft.Container(
-                    margin=ft.Margin.only(right=4),
-                    content=ft.PopupMenuButton(
-                        content=ft.Container(
-                            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-                            border_radius=8,
-                            content=ft.Row(
-                                [
-                                    ft.Icon(
-                                        ft.Icons.FOLDER_OPEN,
-                                        size=18,
-                                        color=Config.PRIMARY,
-                                    ),
-                                    ft.Text(
-                                        f"Documents ({len(self.documents)})",
-                                        size=14,
-                                        weight=ft.FontWeight.W_500,
-                                        font_family=Config.FONT,
-                                    ),
-                                ],
-                                spacing=8,
-                                tight=True,
-                            ),
-                        ),
-                        tooltip="Selected documents",
-                        items=self._build_document_items(),
+                    **Style.documents_menu(
+                        self._build_document_items(), len(self.documents)
                     ),
                 ),
             )
         actions.append(
-            ft.Container(
-                margin=ft.Margin.only(right=20),
-                content=ft.PopupMenuButton(
-                    icon=ft.Icons.MENU,
-                    tooltip="Menu",
-                    items=self._build_menu_items(),
-                    icon_color=Config.PRIMARY,
-                ),
-            ),
+            ft.Container(**Style.menu_button(self._build_menu_items())),
+        )
+
+        self.logo = ft.Container(
+            **Style.app_logo(),
+            on_click=self.go_home,
+            visible=not show,
         )
 
         super().__init__(
-            leading_width=275,
+            **Style.appbar(actions),
             leading=ft.Row(
                 [
                     self.menu_icon,
-                    ft.Container(
-                        content=ft.Image(Config.SVG, color="#13DAEC"),  # noqa
-                        padding=ft.Padding.only(top=10, bottom=10),
-                        margin=ft.Margin.only(left=margin_left),
-                        on_click=self.go_home,
-                    ),
+                    self.logo,
                     ft.Container(
                         ft.Text(**Style.app_name()),
                         on_click=self.go_home,
                     ),
                 ],
             ),
-            toolbar_height=60,
-            title=None,
-            center_title=True,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
-            actions=actions,
         )
 
     # ── Document items ──────────────────────────────────────────────
-    DOC_ITEM_WIDTH = 280
 
-    def _build_document_items(self):
+    def _build_document_items(self) -> list[ft.PopupMenuItem]:
         items: list[ft.PopupMenuItem] = []
         for name in self.documents:
             items.append(
                 ft.PopupMenuItem(
                     content=ft.Container(
-                        width=self.DOC_ITEM_WIDTH,
-                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                        **Style.doc_container(),
                         content=ft.Row(
                             [
-                                ft.Icon(
-                                    ft.Icons.INSERT_DRIVE_FILE_OUTLINED,
-                                    size=18,
-                                    color=ft.Colors.OUTLINE,
-                                ),
-                                ft.Text(
-                                    name,
-                                    size=13,
-                                    font_family=Config.FONT,
-                                    max_lines=1,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    expand=True,
-                                    tooltip=name,
-                                ),
+                                ft.Icon(**Style.doc_icon()),
+                                ft.Text(**Style.doc_title(name)),
                             ],
-                            spacing=10,
-                            tight=True,
                         ),
                     ),
-                    on_click=lambda _e: None,
                 )
             )
         return items
 
     # ── Menu items ──────────────────────────────────────────────────
-    def _build_menu_items(self):
+    def _build_menu_items(self) -> list[ft.PopupMenuItem]:
         items: list[ft.PopupMenuItem] = []
 
         if self.user_email:
             items.append(
                 ft.PopupMenuItem(
-                    content=ft.Container(
-                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-                        content=ft.Column(
-                            [
-                                ft.Text(
-                                    "Signed in as",
-                                    size=11,
-                                    color=ft.Colors.OUTLINE,
-                                    font_family=Config.FONT,
-                                ),
-                                ft.Text(
-                                    self.user_email,
-                                    size=13,
-                                    color=Config.TEAL,
-                                    weight=ft.FontWeight.W_600,
-                                    font_family=Config.FONT,
-                                    max_lines=1,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                ),
-                            ],
-                            spacing=2,
-                            tight=True,
-                        ),
-                    ),
-                    on_click=lambda _e: None,
+                    content=ft.Container(**Style.menu_item(self.user_email))
                 )
             )
             items.append(ft.PopupMenuItem())  # divider
@@ -198,13 +118,13 @@ class Appbar(ft.AppBar):
         return items
 
     # ── Sign in / out ───────────────────────────────────────────────
-    def _on_sign_in(self, e=None):
+    def _on_sign_in(self):
         self.ref_page.run_task(self._sign_in)
 
     async def _sign_in(self):
         await self.ref_page.push_route("/login")
 
-    def _on_sign_out(self, e=None):
+    def _on_sign_out(self):
         self.ref_page.run_task(self._sign_out)
 
     async def _sign_out(self):
@@ -223,20 +143,16 @@ class Appbar(ft.AppBar):
 
     def set_menu_visible(self, visible: bool):
         self.menu_icon.visible = visible
+        self.logo.visible = not visible
 
-    # ── Misc ────────────────────────────────────────────────────────
-    def update_margin(self, w: int):
-        # leading row is [menu_icon, logo_container, name_container]
-        self.leading.controls[1].margin.left = w  # noqa
-
-    def _switch_theme(self, e=None):
+    def _switch_theme(self):
         self.ref_page.theme_mode = (
             ft.ThemeMode.DARK
             if self.ref_page.theme_mode == ft.ThemeMode.LIGHT
             else ft.ThemeMode.LIGHT
         )
-        # Rebuild items so the theme label/icon flips on next open
-        self.actions[0].content.items = self._build_menu_items()
+        # # Rebuild items so the theme label/icon flips on next open
+        # self.actions[0].content.items = self._build_menu_items()
         self.ref_page.update()
 
     async def go_home(self):

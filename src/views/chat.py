@@ -25,21 +25,13 @@ class ChatPage(ft.View):
 
         user = get_user(page)
         self.is_logged_in = user is not None
+        self.user_email = user["email"] if user else None
 
-        # Routes: /chat or /chat/<chat_id>
-        route_parts = page.route.split("/")
-        raw_chat_id = (
-            route_parts[2] if len(route_parts) > 2 and route_parts[2] else None
-        )
-        if raw_chat_id is not None:
-            try:
-                self.chat_id: str | None = str(uuid.UUID(raw_chat_id))
-            except (ValueError, TypeError):
-                self.controls = []
-                page.run_task(self._redirect_to_root)
-                return
-        else:
-            self.chat_id = None
+        self.chat_id: str | None = self._parse_chat_id(page.route)
+        if self.chat_id is None and self._route_had_invalid_id(page.route):
+            self.controls = []
+            page.run_task(self._redirect_to_root)
+            return
 
         self.config = Responsive().get_size()
         self.left_margin = self.config["left_margin"]
@@ -49,33 +41,7 @@ class ChatPage(ft.View):
         self.chat_history_data: list[dict] = []
 
         if self.chat_id is not None:
-            if self.is_logged_in:
-                try:
-                    doc_rows = get_chat_documents(self.chat_id)
-                    self.uploaded_files = [d["file_name"] for d in doc_rows]
-                    db_messages = get_messages(self.chat_id)
-                    self.chat_history_data = [
-                        {"sender": m["sender"], "content": m["content"]}
-                        for m in db_messages
-                    ]
-                except Exception as err:
-                    print(f"Error fetching chat data: {err}")
-                    self.uploaded_files = []
-                    self.chat_history_data = []
-            else:
-                self.uploaded_files = (
-                    self.page_ref.session.store.get(f"uploaded_files_{self.chat_id}")
-                    or []
-                )
-                self.chat_history_data = (
-                    self.page_ref.session.store.get(f"history_{self.chat_id}") or []
-                )
-
-            if (
-                not isinstance(self.uploaded_files, list)
-                or not self.uploaded_files
-                or not all(isinstance(x, str) for x in self.uploaded_files)
-            ):
+            if not self._load_chat_data(self.chat_id):
                 self.controls = []
                 page.run_task(self._redirect_to_root)
                 return
@@ -84,52 +50,25 @@ class ChatPage(ft.View):
 
         self.appbar: Appbar = Appbar(
             page=page,
-            margin_left=self.left_margin,
-            user_email=user["email"] if user else None,
+            user_email=self.user_email,
             documents=self.uploaded_files,
             on_menu_click=self._toggle_drawer,
-            show_menu_icon=is_narrow,
         )
 
-        self.drawer = ChatDrawer(page, self.chat_id, self.is_logged_in)
-        self.drawer.visible = not is_narrow
+        self.side_drawer = ChatDrawer(page, self.chat_id, self.is_logged_in)
+        self.side_drawer.visible = not is_narrow
 
-        if self.chat_id is None:
-            self.upload_card: UploadCard | None = UploadCard(
-                page, on_chat_created=self._on_chat_created
-            )
-            right_pane = self.upload_card
-        else:
-            self.upload_card = None
-            self._build_chat_history()
-            self._build_input_area()
-            self.main_column = ft.Column(
-                controls=[self.chat_listview],
-                expand=True,
-                scroll=None,
-            )
-            right_pane = ft.Container(
-                content=ft.Stack(
-                    [
-                        self.main_column,
-                        ft.Container(
-                            content=self.input_container,
-                            alignment=ft.Alignment.BOTTOM_CENTER,
-                            bottom=0,
-                            left=0,
-                            right=0,
-                        ),
-                    ],
-                    expand=True,
-                ),
-                expand=True,
-            )
+        self.right_pane_container = ft.Container(
+            content=self._build_right_pane(),
+            expand=True,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+        )
 
         self.controls = [
             ft.Row(
                 [
-                    self.drawer,
-                    ft.Container(content=right_pane, expand=True),
+                    self.side_drawer,
+                    self.right_pane_container,
                 ],
                 expand=True,
                 spacing=0,
@@ -137,7 +76,113 @@ class ChatPage(ft.View):
             ),
         ]
 
+        self.appbar.set_menu_visible(is_narrow)
         page.on_resize = self._on_resize
+
+    @staticmethod
+    def _parse_chat_id(route: str) -> str | None:
+        parts = route.split("/")
+        raw = parts[2] if len(parts) > 2 and parts[2] else None
+        if raw is None:
+            return None
+        try:
+            return str(uuid.UUID(raw))
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _route_had_invalid_id(route: str) -> bool:
+        parts = route.split("/")
+        raw = parts[2] if len(parts) > 2 and parts[2] else None
+        if raw is None:
+            return False
+        try:
+            uuid.UUID(raw)
+            return False
+        except (ValueError, TypeError):
+            return True
+
+    def _load_chat_data(self, chat_id: str) -> bool:
+        if self.is_logged_in:
+            try:
+                doc_rows = get_chat_documents(chat_id)
+                self.uploaded_files = [d["file_name"] for d in doc_rows]
+                db_messages = get_messages(chat_id)
+                self.chat_history_data = [
+                    {"sender": m["sender"], "content": m["content"]}
+                    for m in db_messages
+                ]
+            except Exception as err:
+                print(f"Error fetching chat data: {err}")
+                self.uploaded_files = []
+                self.chat_history_data = []
+        else:
+            self.uploaded_files = (
+                self.page_ref.session.store.get(f"uploaded_files_{chat_id}") or []
+            )
+            self.chat_history_data = (
+                self.page_ref.session.store.get(f"history_{chat_id}") or []
+            )
+
+        return (
+            isinstance(self.uploaded_files, list)
+            and bool(self.uploaded_files)
+            and all(isinstance(x, str) for x in self.uploaded_files)
+        )
+
+    def _build_right_pane(self) -> ft.Control:
+        if self.chat_id is None:
+            self.upload_card = UploadCard(
+                self.page_ref, on_chat_created=self._on_chat_created
+            )
+            return self.upload_card
+
+        self.upload_card = None
+        self._build_chat_history()
+        self._build_input_area()
+        self.main_column = ft.Column(
+            controls=[self.chat_listview],
+            expand=True,
+            scroll=None,
+        )
+        return ft.Container(
+            content=ft.Stack(
+                [
+                    self.main_column,
+                    ft.Container(**Style.input_container_style(self.input_container)),
+                ],
+                expand=True,
+            ),
+            expand=True,
+        )
+
+    def load_chat(self, route: str):
+        new_chat_id = self._parse_chat_id(route)
+        if new_chat_id is None and self._route_had_invalid_id(route):
+            self.page_ref.run_task(self._redirect_to_root)
+            return
+
+        old_chat_id = self.chat_id
+        self.route = route
+        self.chat_id = new_chat_id
+        self.uploaded_files = []
+        self.chat_history_data = []
+
+        if new_chat_id is not None and not self._load_chat_data(new_chat_id):
+            self.page_ref.run_task(self._redirect_to_root)
+            return
+
+        self.appbar.documents = self.uploaded_files
+        self.side_drawer.refresh_chats()
+        self.side_drawer.set_active(new_chat_id)
+
+        if old_chat_id is not None and new_chat_id is not None:
+            self.chat_listview.controls = self._build_message_controls()
+            self.chat_listview.update()
+            return
+
+        self.right_pane_container.content = self._build_right_pane()
+        self.right_pane_container.update()
 
     # --- Redirect / navigation helpers ---
     async def _redirect_to_root(self):
@@ -153,23 +198,27 @@ class ChatPage(ft.View):
 
     # --- Drawer toggle (mobile hamburger) ---
     def _toggle_drawer(self, _e=None):
-        self.drawer.visible = not self.drawer.visible
-        self.drawer.update()
+        self.side_drawer.visible = not self.side_drawer.visible
+        self.side_drawer.update()
 
     # --- Chat history ---
+    def _build_message_controls(self) -> list[ft.Control]:
+        controls: list[ft.Control] = []
+        for msg in self.chat_history_data:
+            if msg["sender"] == "user":
+                controls.append(UserMessage(msg["content"]))
+            elif msg["sender"] == "ai":
+                controls.append(AiMessage(msg["content"]))
+        return controls
+
     def _build_chat_history(self):
         self.chat_listview = ft.ListView(
             **Style.chat_history(),
             padding=ft.Padding.only(
                 top=32, bottom=160, left=self.list_padding, right=self.list_padding
             ),
+            controls=self._build_message_controls(),
         )
-
-        for msg in self.chat_history_data:
-            if msg["sender"] == "user":
-                self.chat_listview.controls.append(UserMessage(msg["content"]))
-            elif msg["sender"] == "ai":
-                self.chat_listview.controls.append(AiMessage(msg["content"]))
 
     # --- Input area ---
     def _build_input_area(self):
@@ -307,25 +356,19 @@ class ChatPage(ft.View):
     # --- Responsive logic ---
     def _on_resize(self):
         width = self.page_ref.width
-
+        if not width:
+            return
         if Responsive.crossed_breakpoint(width):
             config = Responsive.get_size()
             padding = config["list_padding"]
-            self.appbar.update_margin(config["left_margin"])
             if self.chat_id is not None:
                 self.chat_listview.padding = ft.Padding.only(
                     top=32, bottom=160, left=padding, right=padding
                 )
 
             is_narrow = (width or 1200) < Breakpoint.MOBILE_BREAKPOINT
-            self.drawer.visible = not is_narrow
+            self.side_drawer.visible = not is_narrow
             self.appbar.set_menu_visible(is_narrow)
-            self.drawer.update()
-
-        if self.upload_card is not None:
-            self.upload_card.apply_responsive(width)
-            self.upload_card.update()
+            self.side_drawer.update()
 
         self.appbar.update()
-        if self.chat_id is not None:
-            self.chat_listview.update()

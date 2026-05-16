@@ -20,6 +20,14 @@ class RouteHandler:
 
     def route(self):
         """Called directly on the startup or passed to page.on_route_change."""
+        if (
+            self.page.route.startswith("/chat")
+            and self.page.views
+            and isinstance(self.page.views[-1], ChatPage)
+        ):
+            self.page.views[-1].load_chat(self.page.route)
+            return
+
         self.page.views.clear()
 
         match self.page.route:

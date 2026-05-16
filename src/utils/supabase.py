@@ -3,6 +3,7 @@ import os
 # load_dotenv() for local dev only, remove/ignore in production
 from dotenv import load_dotenv
 from postgrest.types import CountMethod
+from storage3.types import FileOptions
 
 from supabase import Client, create_client
 
@@ -40,12 +41,13 @@ def upload_document_to_storage(
     user_id: str, file_hash: str, ext: str, content: bytes
 ) -> str:
     storage_path = f"{user_id}/{file_hash}.{ext}"
+    file_options: FileOptions = {
+        "content-type": _CONTENT_TYPES.get(ext, "application/octet-stream"),
+    }
     supabase.storage.from_(DOCUMENTS_BUCKET).upload(
         path=storage_path,
         file=content,
-        file_options={
-            "content-type": _CONTENT_TYPES.get(ext, "application/octet-stream"),
-        },
+        file_options=file_options,
     )
     return storage_path
 
@@ -87,6 +89,10 @@ def delete_storage_object(storage_path: str) -> None:
 def create_chat(user_id: str, title: str) -> dict:
     res = supabase.table("chats").insert({"user_id": user_id, "title": title}).execute()
     return res.data[0]
+
+
+def delete_chat(chat_id: str) -> None:
+    supabase.table("chats").delete().eq("id", chat_id).execute()
 
 
 def list_chats(user_id: str) -> list[dict]:

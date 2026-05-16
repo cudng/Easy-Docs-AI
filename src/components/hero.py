@@ -66,6 +66,7 @@ class Hero(ft.ResponsiveRow):
                                     shape=ft.ContinuousRectangleBorder(radius=10)
                                 ),
                                 bgcolor="#13DAEC",
+                                color=ft.Colors.WHITE,
                                 on_click=self.go_to_session,
                             ),
                             *(

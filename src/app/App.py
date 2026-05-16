@@ -1,7 +1,7 @@
 import flet as ft
 
 from routes import RouteHandler
-from utils import Config, load_session, save_session, supabase
+from utils import Config, clear_session, load_session, save_session, supabase
 
 
 async def main(page: ft.Page):
@@ -12,15 +12,18 @@ async def main(page: ft.Page):
     session: dict | None = await load_session()
 
     if session:
-        response = supabase.auth.set_session(
-            session["access_token"], session["refresh_token"]
-        )
-        if response.session:
-            await save_session(response)
-            page.session.store.set(
-                "user",
-                {"user_id": response.user.id, "email": response.user.email},
+        try:
+            response = supabase.auth.set_session(
+                session["access_token"], session["refresh_token"]
             )
+            if response.session:
+                await save_session(response)
+                page.session.store.set(
+                    "user",
+                    {"user_id": response.user.id, "email": response.user.email},
+                )
+        except Exception:  # noqa
+            await clear_session(page)
 
     router = RouteHandler(page)
 

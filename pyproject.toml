@@ -11,6 +11,7 @@ dependencies = [
     "flet>=0.81.0",
     "postgrest>=2.28.3",
     "python-dotenv>=1.2.2",
+    "storage3>=2.28.3",
     "supabase>=2.28.3",
 ]
 

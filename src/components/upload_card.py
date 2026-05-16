@@ -6,6 +6,7 @@ import flet as ft
 
 from utils import (
     Config,
+    Style,
     count_user_chats,
     create_chat,
     delete_storage_object,
@@ -15,9 +16,6 @@ from utils import (
     link_chat_document,
     upload_document_to_storage,
 )
-
-MAX_CHATS_PER_USER = 10
-MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # matches documents.size_bytes CHECK constraint
 
 
 class UploadCard(ft.Container):
@@ -40,44 +38,16 @@ class UploadCard(ft.Container):
             animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT),
         )
 
-        self.drop_title = ft.Text(
-            "Upload your documents" if self.is_logged_in else "Upload a document",
-            size=22,
-            weight=ft.FontWeight.W_600,
-            font_family=Config.FONT,
-            text_align=ft.TextAlign.CENTER,
-        )
+        self.drop_title = ft.Text(**Style.drop_title_style(self.is_logged_in))
 
-        self.subtitle_top = ft.Text(
-            (
-                "Add up to 3 documents to chat with in this session"
-                if self.is_logged_in
-                else "Guest mode: 1 document, 1 chat, no history"
-            ),
-            size=14,
-            color=ft.Colors.OUTLINE,
-            font_family=Config.FONT,
-            text_align=ft.TextAlign.CENTER,
-        )
+        self.subtitle_top = ft.Text(**Style.subtitle_top_style(self.is_logged_in))
 
         self.pick_btn = ft.Button(
-            "Pick a File",
-            icon=ft.Icons.FOLDER_OPEN,
-            bgcolor=Config.PRIMARY,
-            color=ft.Colors.BLACK,
-            style=ft.ButtonStyle(
-                shape=ft.ContinuousRectangleBorder(radius=12),
-            ),
+            **Style.pick_btn_style(),
             on_click=self._on_pick_click,
         )
 
-        self.subtitle = ft.Text(
-            "Supported formats: PDF, DOCX, TXT",
-            size=13,
-            color=ft.Colors.OUTLINE,
-            font_family=Config.FONT,
-            text_align=ft.TextAlign.CENTER,
-        )
+        self.subtitle = ft.Text(**Style.subtitle_style())
 
         self.guest_notice = ft.Container(
             visible=not self.is_logged_in,
@@ -128,32 +98,22 @@ class UploadCard(ft.Container):
             spacing=10,
         )
 
-        self.upload_zone = ft.Container(
-            padding=ft.Padding.symmetric(horizontal=40, vertical=60),
-            content=self.inner_column,
-            border_radius=12,
-        )
-
         self.upload_zone_card = ft.Card(
-            content=self.upload_zone,
+            content=self.inner_column,
             elevation=10,
+            height=400,
+            width=500,
         )
 
         self.card_wrapper = ft.Container(
             content=self.upload_zone_card,
-            width=700,
-            alignment=ft.Alignment.CENTER,
-            border_radius=12,
             on_click=self._on_pick_click,
             on_hover=self._on_zone_hover,
-            ink=True,
         )
 
         super().__init__(
             content=self.card_wrapper,
-            expand=True,
             alignment=ft.Alignment.CENTER,
-            padding=ft.Padding.symmetric(horizontal=20, vertical=40),
         )
 
     # ── Sign-in link handler ────────────────────────────────────────
@@ -163,7 +123,7 @@ class UploadCard(ft.Container):
     # ── Hover effect on card area ───────────────────────────────────
     def _on_zone_hover(self, e):
         is_hovered = e.data
-        self.upload_zone.bgcolor = (
+        self.upload_zone_card.bgcolor = (
             ft.Colors.SURFACE_CONTAINER_LOWEST if is_hovered else None
         )
 
@@ -189,7 +149,7 @@ class UploadCard(ft.Container):
             )
             result = result[: self.max_files]
 
-        oversize = [f.name for f in result if f.size > MAX_FILE_SIZE_BYTES]
+        oversize = [f.name for f in result if f.size > Config.MAX_FILE_SIZE_BYTES]
         if oversize:
             self.page_ref.show_dialog(
                 ft.SnackBar(
@@ -210,14 +170,14 @@ class UploadCard(ft.Container):
             await self.on_chat_created(chat_id)
             return
 
-        # Logged-in: persist to Supabase
+        # Logged-in: persist to SupaBase
         user_id = user["user_id"]
 
-        if count_user_chats(user_id) >= MAX_CHATS_PER_USER:
+        if count_user_chats(user_id) >= Config.MAX_CHATS_PER_USER:
             self.page_ref.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(
-                        f"Chat limit reached ({MAX_CHATS_PER_USER}). Delete a chat to create a new one."
+                        f"Chat limit reached ({Config.MAX_CHATS_PER_USER}). Delete a chat to create a new one."
                     ),
                 )
             )
@@ -250,7 +210,9 @@ class UploadCard(ft.Container):
                     delete_storage_object(storage_path)
                     raise
 
-            chat = create_chat(user_id, title=result[0].name[:75])
+            base_name = result[0].name.rsplit(".", 1)[0]
+            title = base_name[:50] + "..." if len(base_name) > 50 else base_name
+            chat = create_chat(user_id, title=title)
             chat_id = chat["id"]
 
             for doc_id in document_ids:
@@ -264,21 +226,3 @@ class UploadCard(ft.Container):
             return
 
         await self.on_chat_created(chat_id)
-
-    # ── Responsive sizing (parent invokes on page resize) ───────────
-    def apply_responsive(self, width: int | float | None):
-        if width is None:
-            return
-
-        if width < 600:
-            self.card_wrapper.width = width * 0.92
-            self.upload_zone.padding = ft.Padding.symmetric(horizontal=20, vertical=40)
-            self.drop_title.size = 18
-        elif width < 1200:
-            self.card_wrapper.width = min(600, int(width * 0.7))
-            self.upload_zone.padding = ft.Padding.symmetric(horizontal=30, vertical=50)
-            self.drop_title.size = 20
-        else:
-            self.card_wrapper.width = 700
-            self.upload_zone.padding = ft.Padding.symmetric(horizontal=40, vertical=60)
-            self.drop_title.size = 22

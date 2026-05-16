@@ -5,6 +5,7 @@ from .supabase import (
     count_chat_documents,
     count_user_chats,
     create_chat,
+    delete_chat,
     delete_storage_object,
     get_chat_documents,
     get_document_by_hash,
