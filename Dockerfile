@@ -1,19 +1,17 @@
 FROM python:3.11-slim
 
+ENV PYTHONUNBUFFERED=1 \
+    PORT=8000
+
 WORKDIR /app
 
-# install uv
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv==0.5.*
 
-# copy dependency files first (better caching)
 COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
-# install deps
-RUN uv sync --no-dev
-
-# copy source code
 COPY src ./src
 
 EXPOSE 8000
 
-CMD ["uv", "run", "flet", "run", "--web", "--port", "8000", "src/main.py"]
+CMD ["sh", "-c", "uv run flet run --web --host 0.0.0.0 --port ${PORT} src/main.py"]
