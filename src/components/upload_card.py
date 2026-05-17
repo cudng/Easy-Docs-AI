@@ -1,21 +1,29 @@
+import asyncio
 import hashlib
+import json
 import uuid
 from typing import Awaitable, Callable
 
 import flet as ft
+from flet.controls.services.shared_preferences import SharedPreferences
 
 from utils import (
     Config,
     Style,
+    count_document_chunks,
     count_user_chats,
     create_chat,
     delete_storage_object,
     get_document_by_hash,
     get_user,
+    insert_chunks,
     insert_document,
     link_chat_document,
     upload_document_to_storage,
 )
+from utils.ai.chunk import chunk_text
+from utils.ai.extract import extract_text
+from utils.ai.openrouter import embed_texts
 
 
 class UploadCard(ft.Container):
@@ -105,6 +113,43 @@ class UploadCard(ft.Container):
             width=500,
         )
 
+        self.status_text = ft.Text(
+            "Processing…",
+            size=15,
+            weight=ft.FontWeight.W_500,
+            color=ft.Colors.ON_SURFACE,
+            text_align=ft.TextAlign.CENTER,
+            font_family=Config.FONT,
+        )
+        self.status_filename = ft.Text(
+            "",
+            size=12,
+            color=ft.Colors.OUTLINE,
+            text_align=ft.TextAlign.CENTER,
+            font_family=Config.FONT,
+        )
+        self.loading_card = ft.Card(
+            elevation=10,
+            height=400,
+            width=500,
+            content=ft.Column(
+                [
+                    ft.ProgressRing(
+                        width=48,
+                        height=48,
+                        stroke_width=4,
+                        color=Config.PRIMARY,
+                    ),
+                    ft.Container(height=8),
+                    self.status_text,
+                    self.status_filename,
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=6,
+            ),
+        )
+
         self.card_wrapper = ft.Container(
             content=self.upload_zone_card,
             on_click=self._on_pick_click,
@@ -160,17 +205,55 @@ class UploadCard(ft.Container):
             )
             return
 
+        self._set_processing(True)
+        try:
+            await self._process_upload(result)
+        finally:
+            self._set_processing(False)
+
+    def _set_processing(self, processing: bool):
+        self.pick_btn.disabled = processing
+        self.pick_btn.text = "Processing…" if processing else "Choose file"
+        if processing:
+            self.card_wrapper.content = self.loading_card
+            self.card_wrapper.on_click = None
+            self.card_wrapper.on_hover = None
+        else:
+            self.card_wrapper.content = self.upload_zone_card
+            self.card_wrapper.on_click = self._on_pick_click
+            self.card_wrapper.on_hover = self._on_zone_hover
+        self.card_wrapper.update()
+
+    def _set_status(self, message: str, filename: str = ""):
+        self.status_text.value = message
+        self.status_filename.value = filename
+        self.status_text.update()
+        self.status_filename.update()
+
+    async def _process_upload(self, result: list[ft.FilePickerFile]):
         user = get_user(self.page_ref)
+        prefs = SharedPreferences()
 
         if user is None:
-            # Guest: in-memory only
+            # Guest: extract text, persist in browser localStorage
             chat_id = str(uuid.uuid4())
-            selected_names = [f.name for f in result]
-            self.page_ref.session.store.set(f"uploaded_files_{chat_id}", selected_names)
+            f = result[0]
+            self._set_status("Reading file…", f.name)
+            try:
+                text = await asyncio.to_thread(extract_text, f.name, f.bytes)
+            except Exception as ex:
+                self.page_ref.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"Couldn't read {f.name}: {type(ex).__name__}"),
+                    )
+                )
+                return
+            self._set_status("Creating chat…", f.name)
+            await prefs.set(f"uploaded_files_{chat_id}", json.dumps([f.name]))
+            await prefs.set(f"doc_text_{chat_id}", text)
             await self.on_chat_created(chat_id)
             return
 
-        # Logged-in: persist to SupaBase
         user_id = user["user_id"]
 
         if count_user_chats(user_id) >= Config.MAX_CHATS_PER_USER:
@@ -191,9 +274,58 @@ class UploadCard(ft.Container):
 
                 existing = get_document_by_hash(user_id, file_hash)
                 if existing:
+                    if count_document_chunks(existing["id"]) == 0:
+                        self._set_status("Reading file…", f.name)
+                        try:
+                            text = await asyncio.to_thread(
+                                extract_text, f.name, f.bytes
+                            )
+                        except Exception as ex:
+                            self.page_ref.show_dialog(
+                                ft.SnackBar(
+                                    content=ft.Text(
+                                        f"Couldn't read {f.name}: {type(ex).__name__}"
+                                    ),
+                                )
+                            )
+                            return
+                        self._set_status("Splitting into chunks…", f.name)
+                        chunks = chunk_text(text)
+                        if chunks:
+                            self._set_status("Generating embeddings…", f.name)
+                            embeddings = await embed_texts(chunks)
+                            self._set_status("Saving chunks…", f.name)
+                            await asyncio.to_thread(
+                                insert_chunks, existing["id"], chunks, embeddings
+                            )
                     document_ids.append(existing["id"])
                     continue
 
+                self._set_status("Reading file…", f.name)
+                try:
+                    text = await asyncio.to_thread(extract_text, f.name, f.bytes)
+                except Exception as ex:
+                    self.page_ref.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text(f"Couldn't read {f.name}: {type(ex).__name__}"),
+                        )
+                    )
+                    return
+
+                self._set_status("Splitting into chunks…", f.name)
+                chunks = chunk_text(text)
+                if not chunks:
+                    self.page_ref.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text(f"{f.name} appears to be empty."),
+                        )
+                    )
+                    return
+
+                self._set_status("Generating embeddings…", f.name)
+                embeddings = await embed_texts(chunks)
+
+                self._set_status("Uploading document…", f.name)
                 storage_path = upload_document_to_storage(
                     user_id, file_hash, ext, f.bytes
                 )
@@ -205,11 +337,22 @@ class UploadCard(ft.Container):
                         size_bytes=f.size,
                         file_hash=file_hash,
                     )
-                    document_ids.append(doc["id"])
                 except Exception:
                     delete_storage_object(storage_path)
                     raise
 
+                self._set_status("Saving chunks…", f.name)
+                try:
+                    await asyncio.to_thread(
+                        insert_chunks, doc["id"], chunks, embeddings
+                    )
+                except Exception:
+                    delete_storage_object(storage_path)
+                    raise
+
+                document_ids.append(doc["id"])
+
+            self._set_status("Creating chat…")
             base_name = result[0].name.rsplit(".", 1)[0]
             title = base_name[:50] + "..." if len(base_name) > 50 else base_name
             chat = create_chat(user_id, title=title)

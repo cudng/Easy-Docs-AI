@@ -1,66 +1,103 @@
-# Persistence & limits — progress
+# RAG / LLM integration — progress
 
-Source plan: `~/.claude/plans/velvet-wandering-sloth.md`
+Source plan: `~/.claude/plans/chat-is-mostly-working-curried-pebble.md`
+
+## Architecture (two paths)
+
+- **Guest** (1 doc, ≤ 5 MB) — text extracted at upload, stored in browser via `SharedPreferences` (`doc_text_{chat_id}`), sent verbatim as system context every turn. No embeddings, no DB.
+- **Logged-in** (up to 3 docs) — text extracted → chunked → embedded → stored in Supabase `document_chunks` (pgvector 2048-dim). On every user message, query is embedded and top-K chunks are retrieved via the `match_document_chunks` RPC and sent as context.
+
+Both paths share the same OpenRouter chat completion client.
 
 ## Done
 
-### Step 1 — Schema + RLS + storage
-- [x] `documents`, `chats`, `chat_documents`, `messages` tables with RLS policies and indexes.
-- [x] `set_updated_at()` trigger function + `chats_set_updated_at` trigger.
-- [x] `pgvector` extension enabled (via Supabase dashboard).
-- [x] Private `documents` bucket with per-user-prefix storage policies (SELECT / INSERT / DELETE).
-- [x] Versioned migration at `supabase/migrations/20260514000000_initial_schema.sql`.
+### Step 1 — Dependencies + env
+- [x] Added `openai`, `pypdf`, `python-docx` to `pyproject.toml`.
+- [x] Added `.env` keys: `OPENROUTER_API_KEY`, `OPENROUTER_CHAT_MODEL`, `OPENROUTER_EMBED_MODEL`, `OPENROUTER_SITE_URL`, `OPENROUTER_APP_NAME`.
 
-### Step 2 — Upload flow rewrite (`src/views/session.py`)
-- [x] Supabase helpers added to `src/utils/supabase.py` (`get_document_by_hash`, `upload_document_to_storage`, `insert_document`, `update_document_status`, `delete_storage_object`, `create_chat`, `link_chat_document`).
-- [x] `pick_files(with_data=True)` so bytes are available on web.
-- [x] Per-file size cap (5 MB, matches DB `CHECK`) enforced **before** upload.
-- [x] Branch on `get_user()`: guest stays in-memory; logged-in goes through Supabase.
-- [x] Logged-in flow: SHA-256 hash → dedup via `get_document_by_hash` → upload to bucket at `<user_id>/<file_hash>.<ext>` → insert `documents` row → create `chats` row → link via `chat_documents`.
-- [x] Failure cleanup: orphan storage objects deleted on insert failure; chat creation aborted on any error.
+### Step 2 — OpenRouter client (`src/utils/ai/openrouter.py`)
+- [x] `AsyncOpenAI` client pointed at `https://openrouter.ai/api/v1`.
+- [x] Default headers: `HTTP-Referer`, `X-Title`.
+- [x] `chat_completion(messages, *, max_tokens=1024)` — async.
+- [x] `embed_texts(texts)` — async, uses multimodal input format required by `nvidia/llama-nemotron-embed-vl-1b-v2:free`.
+- [x] `embed_query(text)` — async wrapper.
+- [x] Verified embedding dim = 2048.
 
-### Step 3 — Route / id semantics (`src/views/chat.py` + `session.py`)
-- [x] `doc_id` → `chat_id` rename in `chat.py`.
-- [x] UUID validation on the route segment (`uuid.UUID(raw_chat_id)`); invalid → redirect to `/session`.
-- [x] Guest `session.store` key renamed `uploaded_file_<id>` → `uploaded_files_<chat_id>` (matched in both files).
-- [x] Guest path now uses hyphenated UUIDs (matches DB format).
+### Step 3 — Supabase pgvector schema
+- [x] `vector` extension enabled.
+- [x] `document_chunks` table: `id`, `document_id` FK (ON DELETE CASCADE), `chunk_index`, `content`, `embedding vector(2048)`, `created_at`.
+- [x] B-tree index on `document_id`.
+- [x] No vector index (pgvector caps HNSW/ivfflat at 2000 dims; falls back to sequential scan, fine at current scale).
+- [x] RPC `match_document_chunks(query_embedding, chat_id_filter, match_count)` — joins through `chat_documents`, returns top-K by cosine.
+- [x] RLS enabled on `document_chunks`; SELECT / INSERT / DELETE policies scoped to "user owns the parent document".
 
-### Step 4 — Chat persistence (`src/views/chat.py`)
-- [x] DB-backed history load for logged-in users (`get_chat_documents`, `get_messages`).
-- [x] DB inserts in `_add_user_message` / `_add_ai_message` for logged-in users.
-- [x] Auto-title: first user message updates `chats.title` (cap 75 chars).
-- [x] `role` → `sender` rename to match DB enum.
-- [x] Threading cleanup: `threading.Thread` + `time.sleep` → `page.run_task` + `asyncio.sleep`.
-- [x] No more `session.store` dual write for logged-in users.
+### Step 4 — Extraction + chunking
+- [x] `src/utils/ai/extract.py` — `extract_text(file_name, content)` dispatches on `.pdf` / `.docx` / `.txt`. Whitespace cleanup.
+- [x] `src/utils/ai/chunk.py` — `chunk_text(text, *, max_chars=1500, overlap=200)`. Sliding window prefers `\n\n` → `\n` → `. ` boundaries.
+
+### Step 5 — Supabase chunk helpers (`src/utils/supabase.py`)
+- [x] `insert_chunks(document_id, chunks, embeddings)` — batched insert.
+- [x] `search_chunks(chat_id, query_embedding, match_count=4)` — calls the RPC.
+- [x] `count_document_chunks(document_id)` — added for the dedup backfill path.
+- [x] Re-exported from `src/utils/__init__.py`.
+
+### Step 6 — Message builders (`src/utils/ai/rag.py`)
+- [x] `build_guest_messages(doc_text, history)` — system prompt + full doc + history (last entry is the new user message).
+- [x] `build_rag_messages(chat_id, history) -> (messages | None, sources)` — embeds query, retrieves top-K via RPC, formats source blocks; returns `(None, [])` if no chunks so caller can short-circuit with `NO_DOCS_REPLY` instead of wasting an LLM call.
+- [x] `NO_DOCS_REPLY` constant.
+
+### Step 7 — Upload pipeline (`src/components/upload_card.py`)
+- [x] "Processing…" button state during the async pipeline.
+- [x] Guest branch: extract text → write `uploaded_files_{chat_id}` and `doc_text_{chat_id}` to `SharedPreferences` (JSON-encoded for lists, raw string for text).
+- [x] Logged-in branch: extract → chunk → embed → upload to storage → `insert_document` → `insert_chunks`. Cleanup on failure deletes orphan storage objects.
+- [x] Dedup backfill: when an existing document is reused via hash, check `count_document_chunks` and embed if missing (handles docs uploaded before the chunks pipeline existed).
+
+### Step 8 — LLM wired into chat (`src/views/chat.py`)
+- [x] Imports `chat_completion`, `build_rag_messages`, `build_guest_messages`, `NO_DOCS_REPLY`.
+- [x] `_process` in `_handle_send` replaces the simulated response. Branches on `is_logged_in`. Calls awaited directly (no `to_thread`) since the OpenAI client is async.
+- [x] Exceptions surface as a friendly bubble; user message still persists.
+
+### Step 9 — Source attribution UI (`src/components/chat/messages.py`)
+- [x] `AiMessage(text, sources=None)` — optional sources list.
+- [x] When sources non-empty, renders a simple bordered Column listing them.
+- [x] When sources empty, source block is omitted from the widget tree (no hidden ExpansionTile).
+- [x] Removed the previous hardcoded "PAGE 4, PARAGRAPH 2" / "Enterprise cloud segment…" mock data.
+- [x] `_add_ai_message(text, sources=None)` passes sources through. Loading-remove and bubble-append batched into a single `update()`.
+
+### Cross-cutting / refactors
+- [x] `chat.py._load_chat_data` async (`SharedPreferences` is async).
+- [x] `chat.py.__init__` defers load to `page.run_task(self._setup_async)` instead of blocking init.
+- [x] `chat.py.load_chat` (route handler) async; `route.py` calls it via `page.run_task`.
+- [x] `_add_user_message` / `_add_ai_message` async; guest history writes go to `SharedPreferences`.
+- [x] JSON encoding for `SharedPreferences` complex values (works around Flutter's `List<String>` cast strictness).
+- [x] `delete_chat` cascades: collects linked `document_id`s, deletes join rows + chat, then for any document with zero remaining `chat_documents` references deletes the storage object and the `documents` row (chunks cascade automatically).
 
 ## Still to do
 
-### Step 5 — Quota checks
-- [x] Before creating a chat: count `chats` rows for the user; reject if `>= 10` with a SnackBar.
-- [x] ~~Before linking a doc to a chat: count `chat_documents` rows for that chat; reject if `>= 3` with a SnackBar.~~ Skipped — currently redundant: chat is created fresh in the same flow (count = 0) and `max_files = 3` + slice in `session.py` already cap the upload. Revisit if an "add doc to existing chat" view is added.
-- [ ] (Optional) max total storage per user — sum `size_bytes` before upload.
+### Step 10 — Full end-to-end test
+- [ ] **Blocked by the UI freeze bug** (see Known issues). End-to-end can't be ticked off until the page stops becoming unresponsive on AI reply.
+- [ ] Guest: upload PDF → ask a doc-grounded question → expect a real grounded reply.
+- [ ] Guest: ask a question the doc doesn't answer → expect "not in document" style reply.
+- [ ] Logged-in: upload 2 PDFs → ask question hitting doc A → reply shows sources containing A.
+- [ ] Logged-in: ask question hitting doc B → sources flip to B.
+- [ ] Logged-in: reload page → history persists, sources still rendered for prior replies.
+- [ ] Verify `select count(*) from document_chunks where document_id = '<id>'` matches expected chunk count.
+- [ ] Failure modes: bad / encrypted PDF surfaces a snackbar; broken API key surfaces "Sorry — couldn't reach the model" bubble; user message still persists.
 
-### Step 6 — Remaining cleanup
-- [x] Threading → `page.run_task` (done in step 4).
-- [x] Remove dual write to `session.store` for logged-in users (done in step 4).
-- [ ] `import threading` already removed — verify nothing else in the repo depends on the old `session.store` keys for logged-in users.
+### Nice-to-have (not in original plan)
+- [ ] Allow attaching a doc to an existing chat (currently each chat is born with its docs at creation time).
+- [ ] Source citations clickable / show chunk content on click.
+- [ ] Streaming responses (would require `AiMessage` to accept incremental text updates).
+- [ ] Per-user storage quota check before upload (sum `size_bytes`).
+- [ ] Token-budget guard for the guest path (truncate `doc_text` if it would overflow the model's context).
+- [ ] Document deletion UI surfacing the existing server-side cascade.
 
-## Manual verification checklist
+## Known issues (deferred)
 
-- [ ] Guest: upload 1 file → chat works → refresh → chat is gone (expected).
-- [ ] Logged user: upload 1 file → row in `documents`, object in bucket, chat row + junction row → send messages → rows in `messages`.
-- [ ] First user message updates `chats.title` from filename to message text.
-- [ ] Refresh on logged-in chat page → history reloads from DB.
-- [ ] Try uploading a file > 5 MB → rejected pre-upload (no storage object, no DB row).
-- [ ] Try creating an 11th chat → rejected with UI message.
-- [ ] Try linking a 4th document to a chat → currently capped client-side by `max_files = 3`; no server-side check.
-- [ ] Same file uploaded twice → no duplicate storage object; new junction row links to existing document.
-- [ ] Log in as user B → cannot see user A's documents/chats/messages (RLS).
-- [ ] Tamper URL with random UUID → bounces to `/session`.
-- [ ] Fetch another user's storage object via direct URL → denied.
+- **Page Unresponsive in Chrome after AI reply renders.** Python completes the full pipeline cleanly (verified via prints), DB write succeeds, navigating away and back shows the message correctly — so the freeze is purely client-side Flutter rendering. Suspects investigated and addressed: hardcoded `ExpansionTile` mock data removed; `BoxShadow` on bubbles removed per [Flutter #95949](https://github.com/flutter/flutter/issues/95949); long unconstrained Russian text capped at `width=700`. Still triggers under some condition; needs further isolation.
+- **Llama 3.3 70B free model rate-limits hard (429).** Workaround: change `OPENROUTER_CHAT_MODEL` in `.env` to `google/gemini-2.0-flash-exp:free` or `deepseek/deepseek-chat-v3.1:free`.
 
-## Out of scope (separate plans)
+## Out of scope (separate work)
 
-- RAG pipeline (chunking, embeddings, retrieval).
-- Real LLM integration replacing the simulated response in `chat.py`.
-- Streaming responses, token accounting, per-user rate limiting.
+- Authentication hardening / RLS audit of all tables (only `document_chunks` policies were added in this work).
+- Production deployment (env vars, OpenRouter prod key, storage quota, monitoring).

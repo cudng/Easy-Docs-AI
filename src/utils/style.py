@@ -73,6 +73,16 @@ class Style:
         }
 
     @staticmethod
+    def hidden_scrollbar_theme() -> ft.Theme:
+        return ft.Theme(
+            scrollbar_theme=ft.ScrollbarTheme(
+                thumb_color=ft.Colors.TRANSPARENT,
+                track_color=ft.Colors.TRANSPARENT,
+                thickness=0,
+            ),
+        )
+
+    @staticmethod
     def resources_visibility_toggle() -> dict:
         return {
             "content": "Show Sources",

@@ -92,7 +92,43 @@ def create_chat(user_id: str, title: str) -> dict:
 
 
 def delete_chat(chat_id: str) -> None:
+    linked = (
+        supabase.table("chat_documents")
+        .select("document_id")
+        .eq("chat_id", chat_id)
+        .execute()
+    )
+    doc_ids = [row["document_id"] for row in linked.data]
+
+    supabase.table("chat_documents").delete().eq("chat_id", chat_id).execute()
     supabase.table("chats").delete().eq("id", chat_id).execute()
+
+    for doc_id in doc_ids:
+        remaining = (
+            supabase.table("chat_documents")
+            .select("document_id", count=CountMethod.exact)
+            .eq("document_id", doc_id)
+            .execute()
+        )
+        if (remaining.count or 0) > 0:
+            continue
+
+        doc_res = (
+            supabase.table("documents")
+            .select("storage_path")
+            .eq("id", doc_id)
+            .limit(1)
+            .execute()
+        )
+        if not doc_res.data:
+            continue
+
+        storage_path = doc_res.data[0]["storage_path"]
+        try:
+            delete_storage_object(storage_path)
+        except Exception as err:
+            print(f"Failed to delete storage object {storage_path}: {err}")
+        supabase.table("documents").delete().eq("id", doc_id).execute()
 
 
 def list_chats(user_id: str) -> list[dict]:
@@ -164,3 +200,45 @@ def insert_message(chat_id: str, sender: str, content: str) -> dict:
 
 def update_chat_title(chat_id: str, title: str) -> None:
     supabase.table("chats").update({"title": title}).eq("id", chat_id).execute()
+
+
+def count_document_chunks(document_id: str) -> int:
+    res = (
+        supabase.table("document_chunks")
+        .select("id", count=CountMethod.exact)
+        .eq("document_id", document_id)
+        .execute()
+    )
+    return res.count or 0
+
+
+def insert_chunks(
+    document_id: str, chunks: list[str], embeddings: list[list[float]]
+) -> None:
+    assert len(chunks) == len(embeddings), "chunks and embeddings length mismatch"
+    if not chunks:
+        return
+    rows = [
+        {
+            "document_id": document_id,
+            "chunk_index": i,
+            "content": content,
+            "embedding": embedding,
+        }
+        for i, (content, embedding) in enumerate(zip(chunks, embeddings))
+    ]
+    supabase.table("document_chunks").insert(rows).execute()
+
+
+def search_chunks(
+    chat_id: str, query_embedding: list[float], match_count: int = 4
+) -> list[dict]:
+    res = supabase.rpc(
+        "match_document_chunks",
+        {
+            "query_embedding": query_embedding,
+            "chat_id_filter": chat_id,
+            "match_count": match_count,
+        },
+    ).execute()
+    return res.data or []

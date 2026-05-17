@@ -223,7 +223,7 @@ class LoginPage(ft.View):
             "user",
             {"user_id": response.user.id, "email": response.user.email},
         )
-        await self.page_ref.push_route("/")
+        await self.page_ref.push_route("/chat")
 
     def _on_google_login(self):
         self.page_ref.run_task(self._google_oauth)
@@ -246,9 +246,7 @@ class LoginPage(ft.View):
             self._show_error("Couldn't start Google sign-in.")
             return
 
-        await ft.UrlLauncher().launch_url(
-            response.url, web_only_window_name="_self"
-        )
+        await ft.UrlLauncher().launch_url(response.url, web_only_window_name="_self")
 
     def _show_error(self, msg: str):
         self.error_text.value = msg

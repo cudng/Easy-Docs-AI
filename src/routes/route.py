@@ -25,7 +25,9 @@ class RouteHandler:
             and self.page.views
             and isinstance(self.page.views[-1], ChatPage)
         ):
-            self.page.views[-1].load_chat(self.page.route)
+            self.page.run_task(
+                self.page.views[-1].load_chat, self.page.route
+            )
             return
 
         self.page.views.clear()

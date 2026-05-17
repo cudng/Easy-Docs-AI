@@ -1,3 +1,5 @@
+import asyncio
+
 import flet as ft
 
 from utils import (
@@ -17,10 +19,12 @@ class ChatDrawer(ft.Container):
         page: ft.Page,
         current_chat_id: str | None,
         is_logged_in: bool,
+        on_chat_deleted=None,
     ):
         self.page_ref = page
         self.current_chat_id = current_chat_id
         self.is_logged_in = is_logged_in
+        self.on_chat_deleted = on_chat_deleted
 
         self.new_chat_btn = ft.Button(
             **Style.new_chat_button(self.is_logged_in),
@@ -111,10 +115,10 @@ class ChatDrawer(ft.Container):
             )
         return items
 
-    def refresh_chats(self):
+    async def refresh_chats(self):
         if not self.is_logged_in:
             return
-        self.body.controls = self._build_chat_items()
+        self.body.controls = await asyncio.to_thread(self._build_chat_items)
         self.body.update()
 
     def _build_chat_row(self, chat: dict, index: int) -> ft.Control:
@@ -252,6 +256,8 @@ class ChatDrawer(ft.Container):
             self.page_ref.run_thread(delete_chat, chat_id)
             self.body.controls.pop(index)  # noqa
             self.body.update()
+            if self.on_chat_deleted is not None:
+                self.page_ref.run_task(self.on_chat_deleted, chat_id)
         except Exception as err:
             print(f"Error deleting chat: {err}")
 

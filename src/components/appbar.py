@@ -22,18 +22,16 @@ class Appbar(ft.AppBar):
             on_click=self._on_menu_click,
         )
 
-        actions: list[ft.Control] = []
-        if self.documents:
-            actions.append(
-                ft.Container(
-                    **Style.documents_menu(
-                        self._build_document_items(), len(self.documents)
-                    ),
-                ),
-            )
-        actions.append(
-            ft.Container(**Style.menu_button(self._build_menu_items())),
+        self.documents_container = ft.Container(
+            **Style.documents_menu(
+                self._build_document_items(), len(self.documents)
+            ),
+            visible=bool(self.documents),
         )
+        actions: list[ft.Control] = [
+            self.documents_container,
+            ft.Container(**Style.menu_button(self._build_menu_items())),
+        ]
 
         self.logo = ft.Container(
             **Style.app_logo(),
@@ -56,6 +54,15 @@ class Appbar(ft.AppBar):
         )
 
     # ── Document items ──────────────────────────────────────────────
+    def set_documents(self, documents: list[str]):
+        self.documents = documents or []
+        new_kwargs = Style.documents_menu(
+            self._build_document_items(), len(self.documents)
+        )
+        for key, value in new_kwargs.items():
+            setattr(self.documents_container, key, value)
+        self.documents_container.visible = bool(self.documents)
+        self.documents_container.update()
 
     def _build_document_items(self) -> list[ft.PopupMenuItem]:
         items: list[ft.PopupMenuItem] = []
