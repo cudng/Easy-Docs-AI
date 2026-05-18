@@ -23,4 +23,4 @@ from .supabase import (
     update_document_status,
     upload_document_to_storage,
 )
-from .utils import Responsive, app_redirect_url
+from .utils import Responsive, ScreenSize, app_redirect_url

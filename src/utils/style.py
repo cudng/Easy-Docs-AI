@@ -28,25 +28,34 @@ class Style:
         }
 
     @staticmethod
-    def input_field() -> dict:
+    def input_field(is_narrow: bool = False) -> dict:
         return {
-            "hint_text": "Ask anything about the document...",
+            "hint_text": "Ask anything..." if is_narrow else "Ask anything about the document...",
+            "hint_style": ft.TextStyle(
+                size=13 if is_narrow else 14,
+                color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE),
+            ),
+            "text_style": ft.TextStyle(size=13 if is_narrow else 14),
             "border": ft.InputBorder.NONE,
             "multiline": True,
             "min_lines": 1,
             "max_lines": 5,
-            "cursor_height": 20,
+            "cursor_height": 18 if is_narrow else 20,
             "expand": True,
             "text_align": ft.TextAlign.LEFT,
-            "content_padding": ft.Padding.only(left=24, right=16, top=20, bottom=16),
+            "content_padding": (
+                ft.Padding.only(left=16, right=8, top=14, bottom=12)
+                if is_narrow
+                else ft.Padding.only(left=24, right=16, top=20, bottom=16)
+            ),
             "shift_enter": True,
         }
 
     @staticmethod
-    def send_button_icon() -> dict:
+    def send_button_icon(is_narrow: bool = False) -> dict:
         return {
             "icon": ft.Icons.ARROW_UPWARD_ROUNDED,
-            "icon_size": 18,
+            "icon_size": 14 if is_narrow else 18,
             "padding": ft.Padding.all(0),
             "bgcolor": Config.PRIMARY,
             "icon_color": ft.Colors.WHITE,
@@ -108,13 +117,13 @@ class Style:
         }
 
     @staticmethod
-    def app_name() -> dict:
+    def app_name(is_narrow: bool = False) -> dict:
         return {
             "value": "Easy Docs AI",
             "style": ft.TextStyle(
                 weight=ft.FontWeight.W_700,
                 font_family=Config.FONT,
-                size=20,
+                size=14 if is_narrow else 20,
                 color="#13DAEC",  # noqa
             ),
         }

@@ -100,7 +100,6 @@ class Hero(ft.ResponsiveRow):
                 ft.ResponsiveRowBreakpoint.MD: 7,
                 ft.ResponsiveRowBreakpoint.LG: 5,
             },
-            height=390,
             elevation=10,
             bgcolor=Config.GREY_BG,
             content=ChatMock(),

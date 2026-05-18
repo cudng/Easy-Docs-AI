@@ -1,7 +1,7 @@
 import flet as ft
 
 from components import Appbar, Footer, Hero, HowItWork, Modes
-from utils import Responsive, get_user
+from utils import Responsive, ScreenSize, get_user
 
 
 class HomePage(ft.View):
@@ -9,15 +9,14 @@ class HomePage(ft.View):
         super().__init__(padding=0, route=page.route, scroll=ft.ScrollMode.HIDDEN)
 
         self.responsive = Responsive()
-        self.config = self.responsive.get_size()
+        self.config = self.responsive.get_size(page.width)
         self.font_size = self.config["font_size"]
         self.left_margin = self.config["left_margin"]
         self.top_margin = self.config["top_margin"]
-        self.right_margin = self.config["right_margin"]
+        is_mobile = Responsive._last_breakpoint == ScreenSize.MOBILE
         self.top_divider = ft.Divider(
             color=ft.Colors.TRANSPARENT, height=self.top_margin
         )
-        self.right_divider = ft.VerticalDivider(self.right_margin)
 
         user = get_user(page)
         self.appbar: Appbar = Appbar(
@@ -25,16 +24,16 @@ class HomePage(ft.View):
             user_email=user["email"] if user else None,
         )
         self.hero = Hero(self.font_size)
-        self.how_it_work = HowItWork()
-        self.modes = Modes()
-        self.footer = Footer()
+        self.how_it_work = HowItWork(is_mobile=is_mobile)
+        self.modes = Modes(is_mobile=is_mobile)
+        self.footer = Footer(is_mobile=is_mobile)
 
         self.controls = [
             ft.Column(
                 [
                     self.top_divider,
                     ft.Row([self.hero]),
-                    ft.Divider(height=40),
+                    ft.Divider(height=10 if is_mobile else 40),
                     self.how_it_work,
                     self.modes,
                     self.footer,
@@ -65,9 +64,8 @@ class HomePage(ft.View):
             config = self.responsive.get_size()
 
             font_size = config["font_size"]
-            right_margin = config["right_margin"]
             top_margin = config["top_margin"]
 
-            self.right_divider.width = right_margin
             self.top_divider.height = top_margin
+            self.top_divider.update()
             self.hero.rebuild_shapes(font_size)

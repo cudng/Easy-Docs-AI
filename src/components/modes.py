@@ -4,16 +4,18 @@ from utils import Config
 
 
 class Modes(ft.Container):
-    def __init__(self):
+    def __init__(self, is_mobile: bool = False):
         super().__init__()
 
-        self.padding = ft.Padding.symmetric(horizontal=20, vertical=60)
+        self.padding = ft.Padding.symmetric(
+            horizontal=20, vertical=20 if is_mobile else 60
+        )
 
         # Section Title and Subtitle
         title = ft.Text(
             "Choose Your Mode:",
             style=ft.TextStyle(
-                size=36,
+                size=24 if is_mobile else 36,
                 color=ft.Colors.ON_SURFACE,
                 font_family=Config.FONT,
                 weight=ft.FontWeight.BOLD,
@@ -25,7 +27,9 @@ class Modes(ft.Container):
         subtitle = ft.Text(
             "EasyDoc AI offers flexible ways to interact with your documents based on your privacy and storage needs.",
             style=ft.TextStyle(
-                size=16, color=ft.Colors.ON_SURFACE_VARIANT, font_family=Config.FONT
+                size=14 if is_mobile else 16,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+                font_family=Config.FONT,
             ),
             text_align=ft.TextAlign.CENTER,
             width=float("inf"),
@@ -35,7 +39,7 @@ class Modes(ft.Container):
             content=ft.Column(
                 [title, subtitle], alignment=ft.MainAxisAlignment.CENTER, spacing=15
             ),
-            margin=ft.Margin.only(bottom=50),
+            margin=ft.Margin.only(bottom=24 if is_mobile else 50),
         )
 
         # Helper method to create cards
@@ -53,7 +57,7 @@ class Modes(ft.Container):
 
             card_title = ft.Text(
                 step_title,
-                size=22,
+                size=18 if is_mobile else 22,
                 weight=ft.FontWeight.W_600,
                 # color=ft.Colors.ON_SURFACE,
                 font_family=Config.FONT,
@@ -63,7 +67,7 @@ class Modes(ft.Container):
 
             card_desc = ft.Text(
                 step_desc,
-                size=14,
+                size=13 if is_mobile else 14,
                 color=ft.Colors.ON_SURFACE_VARIANT,
                 font_family=Config.FONT,
                 text_align=ft.TextAlign.START,
@@ -113,7 +117,7 @@ class Modes(ft.Container):
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.START,
                 ),
-                padding=35,
+                padding=20 if is_mobile else 35,
                 border_radius=15,
                 border=ft.Border.all(1, ft.Colors.TRANSPARENT),
                 animate=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT),
@@ -151,8 +155,8 @@ class Modes(ft.Container):
                 ft.Column(col={"sm": 12, "md": 6}, controls=[card1]),
                 ft.Column(col={"sm": 12, "md": 6}, controls=[card2]),
             ],
-            spacing=30,
-            run_spacing=30,
+            spacing=12 if is_mobile else 30,
+            run_spacing=12 if is_mobile else 30,
         )
 
         self.content = ft.Column(

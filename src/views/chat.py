@@ -9,6 +9,7 @@ from components import Appbar, ChatDrawer, UploadCard
 from components.chat import AiMessage, UserMessage
 from components.utils import create_placeholder
 from utils import (
+    Config,
     Responsive,
     Style,
     get_chat_documents,
@@ -49,6 +50,7 @@ class ChatPage(ft.View):
         self.stop_event: asyncio.Event | None = None
 
         is_narrow = (page.width or 1200) < Breakpoint.MOBILE_BREAKPOINT
+        self.is_narrow = is_narrow
 
         self.appbar: Appbar = Appbar(
             page=page,
@@ -69,17 +71,20 @@ class ChatPage(ft.View):
             content=self._build_right_pane(),
             expand=True,
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+            padding=ft.Padding.only(left=0 if is_narrow else Config.DRAWER_WIDTH),
         )
 
+        self.side_drawer.left = 0
+        self.side_drawer.top = 0
+        self.side_drawer.bottom = 0
+
         self.controls = [
-            ft.Row(
+            ft.Stack(
                 [
-                    self.side_drawer,
                     self.right_pane_container,
+                    self.side_drawer,
                 ],
                 expand=True,
-                spacing=0,
-                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
         ]
 
@@ -235,9 +240,9 @@ class ChatPage(ft.View):
         controls: list[ft.Control] = []
         for msg in self.chat_history_data:
             if msg["sender"] == "user":
-                controls.append(UserMessage(msg["content"]))
+                controls.append(UserMessage(msg["content"], is_narrow=self.is_narrow))
             elif msg["sender"] == "ai":
-                controls.append(AiMessage(msg["content"]))
+                controls.append(AiMessage(msg["content"], is_narrow=self.is_narrow))
         return controls
 
     def _build_chat_history(self):
@@ -249,22 +254,27 @@ class ChatPage(ft.View):
     # --- Input area ---
     def _build_input_area(self):
         self.send_icon = ft.IconButton(
-            **Style.send_button_icon(),
+            **Style.send_button_icon(self.is_narrow),
             on_click=self._handle_send,
             disabled=True,
             opacity=0.4,
         )
 
         self.input_field = ft.TextField(
-            **Style.input_field(),
+            **Style.input_field(self.is_narrow),
             on_submit=self._handle_send,
             on_change=self._on_input_change,
         )
 
+        btn_size = 32 if self.is_narrow else 40
+        btn_wrap_right = 8 if self.is_narrow else 12
+        btn_wrap_bottom = 4 if self.is_narrow else 6
+
         self.send_button = ft.Container(
-            height=40,
-            width=40,
+            height=btn_size,
+            width=btn_size,
             content=self.send_icon,
+            offset=ft.Offset(0, -0.12) if self.is_narrow else None,
         )
 
         input_row = ft.Container(
@@ -278,7 +288,9 @@ class ChatPage(ft.View):
                                 self.send_button,
                             ]
                         ),
-                        padding=ft.Padding.only(right=12, bottom=6),
+                        padding=ft.Padding.only(
+                            right=btn_wrap_right, bottom=btn_wrap_bottom
+                        ),
                         alignment=ft.Alignment.BOTTOM_RIGHT,
                     ),
                 ],
@@ -294,7 +306,7 @@ class ChatPage(ft.View):
                         content=input_row,
                         width=900,
                     ),
-                    create_placeholder(),
+                    create_placeholder(self.is_narrow),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
@@ -356,7 +368,7 @@ class ChatPage(ft.View):
                     await self._add_ai_message(NO_DOCS_REPLY, chat_id_at_send)
                     return
 
-                messages: list[dict] | None = None
+                # messages: list[dict] | None = None
                 try:
                     if self.is_logged_in:
                         messages, _ = await build_rag_messages(
@@ -391,7 +403,9 @@ class ChatPage(ft.View):
     ):
         ai_bubble: AiMessage | None = None
         if chat_id == self.chat_id:
-            ai_bubble = AiMessage("")
+            ai_bubble = AiMessage("", is_narrow=self.is_narrow)
+            if not ai_bubble:
+                return
             self.chat_listview.controls.append(ai_bubble)
             self.page_ref.update()
 
@@ -432,7 +446,7 @@ class ChatPage(ft.View):
             )
 
     async def _add_user_message(self, text: str):
-        bubble = UserMessage(text)
+        bubble = UserMessage(text, is_narrow=self.is_narrow)
         self.chat_listview.controls.append(bubble)
         self.page_ref.update()
 
@@ -459,7 +473,7 @@ class ChatPage(ft.View):
                 await asyncio.to_thread(insert_message, chat_id, "ai", text)
             return
 
-        bubble = AiMessage(text)
+        bubble = AiMessage(text, is_narrow=self.is_narrow)
         self.chat_listview.controls.append(bubble)
         self.page_ref.update()
 
@@ -487,7 +501,15 @@ class ChatPage(ft.View):
                 )
 
             is_narrow = (width or 1200) < Breakpoint.MOBILE_BREAKPOINT
+            self.is_narrow = is_narrow
+            if self.chat_id is not None and hasattr(self, "chat_listview"):
+                self.chat_listview.controls = self._build_message_controls()
+                self.chat_listview.update()
             self.side_drawer.visible = not is_narrow
+            self.right_pane_container.padding = ft.Padding.only(
+                left=0 if is_narrow else Config.DRAWER_WIDTH
+            )
+            self.right_pane_container.update()
             self.appbar.set_menu_visible(is_narrow)
             self.side_drawer.update()
 

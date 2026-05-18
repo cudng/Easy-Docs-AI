@@ -60,7 +60,9 @@ class Responsive:
         return False
 
     @staticmethod
-    def get_size() -> dict:
+    def get_size(width: int | float | None = None) -> dict:
+        if width and width > 0:
+            Responsive._last_breakpoint = Responsive.screen(width)
 
         if Responsive._last_breakpoint == ScreenSize.MOBILE:
             return Config.mobile

@@ -3,12 +3,14 @@ import flet as ft
 from utils import Config
 
 
-def create_placeholder():
+def create_placeholder(is_narrow: bool = False):
     return ft.Container(
         content=ft.Text(
-            "AI can make mistakes. Please verify important information.",
-            size=11,
+            "AI can make mistakes." if is_narrow else "AI can make mistakes. Please verify important information.",
+            size=10 if is_narrow else 11,
             color=ft.Colors.OUTLINE,
+            text_align=ft.TextAlign.CENTER,
+            max_lines=1,
         ),
         margin=ft.Margin.only(top=12),
     )

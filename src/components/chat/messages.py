@@ -4,7 +4,17 @@ from utils import Config
 
 
 class UserMessage(ft.Container):
-    def __init__(self, text: str):
+    def __init__(self, text: str, is_narrow: bool = False):
+        avatar_size = 24 if is_narrow else 32
+        avatar_radius = avatar_size // 2
+        icon_size = 14 if is_narrow else 20
+        label_size = 11
+        body_size = 13 if is_narrow else 15
+        bubble_h = 14 if is_narrow else 20
+        bubble_v = 10 if is_narrow else 14
+        outer_left = 20 if is_narrow else 60
+        avatar_top = 14 if is_narrow else 20
+
         super().__init__(
             content=ft.Row(
                 controls=[
@@ -12,7 +22,7 @@ class UserMessage(ft.Container):
                         controls=[
                             ft.Text(
                                 "You",
-                                size=11,
+                                size=label_size,
                                 color=ft.Colors.OUTLINE,
                                 weight=ft.FontWeight.W_500,
                             ),
@@ -20,12 +30,12 @@ class UserMessage(ft.Container):
                                 content=ft.Text(
                                     text,
                                     color=ft.Colors.ON_PRIMARY,
-                                    size=15,
+                                    size=body_size,
                                     selectable=True,
                                 ),
                                 bgcolor=Config.PRIMARY,
                                 padding=ft.Padding.symmetric(
-                                    horizontal=20, vertical=14
+                                    horizontal=bubble_h, vertical=bubble_v
                                 ),
                                 border_radius=ft.BorderRadius.only(
                                     top_left=16,
@@ -40,31 +50,43 @@ class UserMessage(ft.Container):
                     ),
                     ft.Container(
                         content=ft.Icon(
-                            ft.Icons.PERSON, color=ft.Colors.OUTLINE, size=20
+                            ft.Icons.PERSON, color=ft.Colors.OUTLINE, size=icon_size
                         ),
-                        width=32,
-                        height=32,
-                        border_radius=16,
+                        width=avatar_size,
+                        height=avatar_size,
+                        border_radius=avatar_radius,
                         border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
                         alignment=ft.Alignment.CENTER,
-                        margin=ft.Margin.only(top=20),
+                        margin=ft.Margin.only(top=avatar_top),
                     ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.START,
             ),
-            padding=ft.Padding.only(left=60),
+            padding=ft.Padding.only(left=outer_left),
             expand=True,
         )
 
 
 class AiMessage(ft.Container):
-    def __init__(self, text: str = ""):
-        super().__init__(padding=ft.Padding.only(right=60), expand=True)
+    def __init__(self, text: str = "", is_narrow: bool = False):
+        avatar_size = 24 if is_narrow else 32
+        avatar_radius = avatar_size // 2
+        icon_size = 14 if is_narrow else 18
+        label_size = 11
+        body_size = 13 if is_narrow else 15
+        bubble_h = 14 if is_narrow else 24
+        bubble_v = 10 if is_narrow else 16
+        outer_right = 20 if is_narrow else 60
+        avatar_top = 14 if is_narrow else 20
+        action_icon_size = 12 if is_narrow else 14
+        action_text_size = 11 if is_narrow else 12
+
+        super().__init__(padding=ft.Padding.only(right=outer_right), expand=True)
 
         self.text_widget = ft.Text(
             text,
             color=ft.Colors.ON_SURFACE,
-            size=15,
+            size=body_size,
             selectable=True,
         )
 
@@ -72,7 +94,7 @@ class AiMessage(ft.Container):
             content=self.text_widget,
             bgcolor=ft.Colors.SURFACE,
             border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
-            padding=ft.Padding.symmetric(horizontal=24, vertical=16),
+            padding=ft.Padding.symmetric(horizontal=bubble_h, vertical=bubble_v),
             border_radius=ft.BorderRadius.only(
                 top_left=2,
                 bottom_left=16,
@@ -86,8 +108,8 @@ class AiMessage(ft.Container):
                 ft.TextButton(
                     content=ft.Row(
                         [
-                            ft.Icon(ft.Icons.CONTENT_COPY, size=14),
-                            ft.Text("Copy", size=12),
+                            ft.Icon(ft.Icons.CONTENT_COPY, size=action_icon_size),
+                            ft.Text("Copy", size=action_text_size),
                         ],
                         spacing=4,
                     ),
@@ -103,17 +125,19 @@ class AiMessage(ft.Container):
         self.content = ft.Row(
             controls=[
                 ft.Container(
-                    content=ft.Icon(ft.Icons.SMART_TOY, color=ft.Colors.WHITE, size=18),
-                    width=32,
-                    height=32,
-                    border_radius=16,
+                    content=ft.Icon(
+                        ft.Icons.SMART_TOY, color=ft.Colors.WHITE, size=icon_size
+                    ),
+                    width=avatar_size,
+                    height=avatar_size,
+                    border_radius=avatar_radius,
                     gradient=ft.LinearGradient(
                         begin=ft.Alignment.TOP_LEFT,
                         end=ft.Alignment.BOTTOM_RIGHT,
                         colors=[ft.Colors.INDIGO_500, ft.Colors.PURPLE_600],
                     ),
                     alignment=ft.Alignment.CENTER,
-                    margin=ft.Margin.only(top=20),
+                    margin=ft.Margin.only(top=avatar_top),
                 ),
                 ft.Column(
                     controls=[
@@ -121,14 +145,16 @@ class AiMessage(ft.Container):
                             [
                                 ft.Text(
                                     "AI Assistant",
-                                    size=11,
+                                    size=label_size,
                                     color=ft.Colors.OUTLINE,
                                     weight=ft.FontWeight.W_500,
                                 ),
-                                ft.Text("•", size=11, color=ft.Colors.OUTLINE_VARIANT),
+                                ft.Text(
+                                    "•", size=label_size, color=ft.Colors.OUTLINE_VARIANT
+                                ),
                                 ft.Text(
                                     "Just now",
-                                    size=11,
+                                    size=label_size,
                                     color=ft.Colors.OUTLINE_VARIANT,
                                 ),
                             ],

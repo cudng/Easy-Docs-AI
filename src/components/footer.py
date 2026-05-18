@@ -1,14 +1,18 @@
 import flet as ft
 
 from utils import Config
+from utils.supabase import url
 
 
 class Footer(ft.Container):
-    def __init__(self):
+    def __init__(self, is_mobile: bool = False):
         super().__init__(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
-            padding=ft.Padding.symmetric(vertical=40, horizontal=40),
-            margin=ft.Margin.only(top=60),
+            padding=ft.Padding.symmetric(
+                vertical=20 if is_mobile else 40,
+                horizontal=20 if is_mobile else 40,
+            ),
+            margin=ft.Margin.only(top=20 if is_mobile else 60),
             content=ft.Column(
                 [
                     # ── Divider ──
@@ -77,6 +81,7 @@ class Footer(ft.Container):
                                             color="#26A5E4",
                                         ),
                                         tooltip="Telegram",
+                                        url="https://t.me/YevhenKryvtsov",
                                     ),
                                     ft.IconButton(
                                         ft.Image(
@@ -86,6 +91,7 @@ class Footer(ft.Container):
                                             color="#FF0069",
                                         ),
                                         tooltip="Instagram",
+                                        url="https://www.instagram.com/yevhenkryvtsov/",
                                     ),
                                     ft.IconButton(
                                         ft.Image(
@@ -95,6 +101,7 @@ class Footer(ft.Container):
                                             color="#25D366",
                                         ),
                                         tooltip="WhatsApp",
+                                        url="https://wa.me/380931846058",
                                     ),
                                 ],
                                 spacing=0,

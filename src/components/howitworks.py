@@ -4,17 +4,19 @@ from utils import Config
 
 
 class HowItWork(ft.Container):
-    def __init__(self):
+    def __init__(self, is_mobile: bool = False):
         super().__init__()
 
         # Responsive spacing
-        self.padding = ft.Padding.symmetric(horizontal=20, vertical=60)
+        self.padding = ft.Padding.symmetric(
+            horizontal=20, vertical=20 if is_mobile else 60
+        )
 
         # Section Title and Subtitle
         title = ft.Text(
             "How It Works",
             style=ft.TextStyle(
-                size=36,
+                size=24 if is_mobile else 36,
                 color=ft.Colors.ON_SURFACE,
                 font_family=Config.FONT,
                 weight=ft.FontWeight.BOLD,
@@ -26,7 +28,9 @@ class HowItWork(ft.Container):
         subtitle = ft.Text(
             "Three simple steps to unlock the knowledge buried in your files. No complex\nsetup required.",
             style=ft.TextStyle(
-                size=16, color=ft.Colors.ON_SURFACE_VARIANT, font_family=Config.FONT
+                size=14 if is_mobile else 16,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+                font_family=Config.FONT,
             ),
             text_align=ft.TextAlign.CENTER,
             width=float("inf"),
@@ -36,7 +40,7 @@ class HowItWork(ft.Container):
             content=ft.Column(
                 [title, subtitle], alignment=ft.MainAxisAlignment.CENTER, spacing=15
             ),
-            margin=ft.Margin.only(bottom=50),
+            margin=ft.Margin.only(bottom=24 if is_mobile else 50),
         )
 
         # Helper method to create cards
@@ -62,7 +66,7 @@ class HowItWork(ft.Container):
                             ft.Text(
                                 step_title,
                                 style=ft.TextStyle(
-                                    size=20,
+                                    size=18 if is_mobile else 20,
                                     weight=ft.FontWeight.W_600,
                                     color=ft.Colors.ON_SURFACE,
                                     font_family=Config.FONT,
@@ -73,7 +77,7 @@ class HowItWork(ft.Container):
                             ft.Text(
                                 step_desc,
                                 style=ft.TextStyle(
-                                    size=14,
+                                    size=13 if is_mobile else 14,
                                     color=ft.Colors.ON_SURFACE_VARIANT,
                                     font_family=Config.FONT,
                                 ),
@@ -83,7 +87,7 @@ class HowItWork(ft.Container):
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=35,
+                    padding=20 if is_mobile else 35,
                     border_radius=15,
                 ),
             )
@@ -113,8 +117,8 @@ class HowItWork(ft.Container):
                 ft.Column(col={"sm": 12, "md": 4}, controls=[card2]),
                 ft.Column(col={"sm": 12, "md": 4}, controls=[card3]),
             ],
-            spacing=30,
-            run_spacing=30,
+            spacing=12 if is_mobile else 30,
+            run_spacing=12 if is_mobile else 30,
         )
 
         self.content = ft.Column(

@@ -1,6 +1,7 @@
 import flet as ft
 
 from utils import Config, Style, clear_session
+from utils.utils import Breakpoint
 
 
 class Appbar(ft.AppBar):
@@ -16,6 +17,7 @@ class Appbar(ft.AppBar):
         self.user_email = user_email
         self.documents = documents or []
         self.on_menu_click = on_menu_click
+        is_narrow = (page.width or 1200) < Breakpoint.MOBILE_BREAKPOINT
 
         self.menu_icon = ft.IconButton(
             **Style.menu_icon(show),
@@ -39,6 +41,7 @@ class Appbar(ft.AppBar):
             visible=not show,
         )
 
+        self.title_text = ft.Text(**Style.app_name(is_narrow))
         super().__init__(
             **Style.appbar(actions),
             leading=ft.Row(
@@ -46,7 +49,7 @@ class Appbar(ft.AppBar):
                     self.menu_icon,
                     self.logo,
                     ft.Container(
-                        ft.Text(**Style.app_name()),
+                        self.title_text,
                         on_click=self.go_home,
                     ),
                 ],
@@ -151,6 +154,8 @@ class Appbar(ft.AppBar):
     def set_menu_visible(self, visible: bool):
         self.menu_icon.visible = visible
         self.logo.visible = not visible
+        new_style = Style.app_name(is_narrow=visible)["style"]
+        self.title_text.style = new_style
 
     def _switch_theme(self):
         self.ref_page.theme_mode = (

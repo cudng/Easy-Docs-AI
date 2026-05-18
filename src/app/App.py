@@ -9,6 +9,9 @@ async def main(page: ft.Page):
     page.theme = Config.THEME
     page.dark_theme = Config.DARK_THEME
 
+    page.window.width = 390
+    page.window.height = 844
+    page.update()
     session: dict | None = await load_session()
 
     if session:
