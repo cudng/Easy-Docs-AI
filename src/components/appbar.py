@@ -30,9 +30,11 @@ class Appbar(ft.AppBar):
             ),
             visible=bool(self.documents),
         )
+        menu_button_kwargs = Style.menu_button(self._build_menu_items())
+        self.menu_button = menu_button_kwargs["content"]
         actions: list[ft.Control] = [
             self.documents_container,
-            ft.Container(**Style.menu_button(self._build_menu_items())),
+            ft.Container(**menu_button_kwargs),
         ]
 
         self.logo = ft.Container(
@@ -163,8 +165,7 @@ class Appbar(ft.AppBar):
             if self.ref_page.theme_mode == ft.ThemeMode.LIGHT
             else ft.ThemeMode.LIGHT
         )
-        # # Rebuild items so the theme label/icon flips on next open
-        # self.actions[0].content.items = self._build_menu_items()
+        self.menu_button.items = self._build_menu_items()
         self.ref_page.update()
 
     async def go_home(self):
