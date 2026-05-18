@@ -18,7 +18,7 @@ def app_redirect_url(page: ft.Page, path: str = "") -> str:
 
 
 class Breakpoint:
-    MOBILE_BREAKPOINT = 600
+    MOBILE_BREAKPOINT = 1024
     LAPTOP_BREAKPOINT = 1200
 
 
