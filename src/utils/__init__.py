@@ -13,7 +13,6 @@ from .supabase import (
     get_document_by_hash,
     get_messages,
     insert_chunks,
-    insert_document,
     insert_message,
     link_chat_document,
     list_chats,
@@ -21,6 +20,7 @@ from .supabase import (
     supabase,
     update_chat_title,
     update_document_status,
+    upload_document_atomic,
     upload_document_to_storage,
 )
 from .utils import Responsive, ScreenSize, app_redirect_url

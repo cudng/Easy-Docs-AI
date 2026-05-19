@@ -15,6 +15,7 @@ class Config:
     MAX_FILE_SIZE_BYTES = (
         5 * 1024 * 1024
     )  # matches documents.size_bytes CHECK constraint
+    MAX_FILE_SIZE_BYTES_GUEST = 2 * 1024 * 1024
     _NO_TRANSITIONS = ft.PageTransitionsTheme(
         android=ft.PageTransitionTheme.NONE,
         ios=ft.PageTransitionTheme.NONE,

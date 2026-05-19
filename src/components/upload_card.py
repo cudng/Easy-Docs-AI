@@ -13,12 +13,13 @@ from utils import (
     count_document_chunks,
     count_user_chats,
     create_chat,
+    delete_chat,
     delete_storage_object,
     get_document_by_hash,
     get_user,
     insert_chunks,
-    insert_document,
     link_chat_document,
+    upload_document_atomic,
     upload_document_to_storage,
 )
 from utils.ai.chunk import chunk_text
@@ -194,12 +195,18 @@ class UploadCard(ft.Container):
             )
             result = result[: self.max_files]
 
-        oversize = [f.name for f in result if f.size > Config.MAX_FILE_SIZE_BYTES]
+        size_limit = (
+            Config.MAX_FILE_SIZE_BYTES
+            if self.is_logged_in
+            else Config.MAX_FILE_SIZE_BYTES_GUEST
+        )
+        size_limit_mb = size_limit // (1024 * 1024)
+        oversize = [f.name for f in result if f.size > size_limit]
         if oversize:
             self.page_ref.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(
-                        f"File too large (max 5 MB): {', '.join(oversize)}"
+                        f"File too large (max {size_limit_mb} MB): {', '.join(oversize)}"
                     ),
                 )
             )
@@ -266,101 +273,114 @@ class UploadCard(ft.Container):
             )
             return
 
-        try:
-            document_ids: list[str] = []
-            for f in result:
-                file_hash = hashlib.sha256(f.bytes).hexdigest()
-                ext = f.name.rsplit(".", 1)[-1].lower()
+        # Phase 1: prepare everything in memory (extract, chunk, embed).
+        # No DB writes, no storage uploads — failures here cost only API credit.
+        prepared: list[dict] = []
+        for f in result:
+            file_hash = hashlib.sha256(f.bytes).hexdigest()
+            ext = f.name.rsplit(".", 1)[-1].lower()
 
-                existing = get_document_by_hash(user_id, file_hash)
-                if existing:
-                    if count_document_chunks(existing["id"]) == 0:
-                        self._set_status("Reading file…", f.name)
-                        try:
-                            text = await asyncio.to_thread(
-                                extract_text, f.name, f.bytes
-                            )
-                        except Exception as ex:
-                            self.page_ref.show_dialog(
-                                ft.SnackBar(
-                                    content=ft.Text(
-                                        f"Couldn't read {f.name}: {type(ex).__name__}"
-                                    ),
-                                )
-                            )
-                            return
-                        self._set_status("Splitting into chunks…", f.name)
-                        chunks = chunk_text(text)
-                        if chunks:
-                            self._set_status("Generating embeddings…", f.name)
-                            embeddings = await embed_texts(chunks)
-                            self._set_status("Saving chunks…", f.name)
-                            await asyncio.to_thread(
-                                insert_chunks, existing["id"], chunks, embeddings
-                            )
-                    document_ids.append(existing["id"])
-                    continue
+            existing = get_document_by_hash(user_id, file_hash)
+            if existing and count_document_chunks(existing["id"]) > 0:
+                prepared.append({"kind": "reuse", "doc_id": existing["id"]})
+                continue
 
-                self._set_status("Reading file…", f.name)
-                try:
-                    text = await asyncio.to_thread(extract_text, f.name, f.bytes)
-                except Exception as ex:
-                    self.page_ref.show_dialog(
-                        ft.SnackBar(
-                            content=ft.Text(f"Couldn't read {f.name}: {type(ex).__name__}"),
-                        )
+            self._set_status("Reading file…", f.name)
+            try:
+                text = await asyncio.to_thread(extract_text, f.name, f.bytes)
+            except Exception as ex:
+                self.page_ref.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"Couldn't read {f.name}: {type(ex).__name__}"),
                     )
-                    return
-
-                self._set_status("Splitting into chunks…", f.name)
-                chunks = chunk_text(text)
-                if not chunks:
-                    self.page_ref.show_dialog(
-                        ft.SnackBar(
-                            content=ft.Text(f"{f.name} appears to be empty."),
-                        )
-                    )
-                    return
-
-                self._set_status("Generating embeddings…", f.name)
-                embeddings = await embed_texts(chunks)
-
-                self._set_status("Uploading document…", f.name)
-                storage_path = upload_document_to_storage(
-                    user_id, file_hash, ext, f.bytes
                 )
-                try:
-                    doc = insert_document(
-                        user_id=user_id,
-                        file_name=f.name,
-                        storage_path=storage_path,
-                        size_bytes=f.size,
-                        file_hash=file_hash,
-                    )
-                except Exception:
-                    delete_storage_object(storage_path)
-                    raise
+                return
 
-                self._set_status("Saving chunks…", f.name)
-                try:
+            self._set_status("Splitting into chunks…", f.name)
+            chunks = chunk_text(text)
+            if not chunks:
+                self.page_ref.show_dialog(
+                    ft.SnackBar(content=ft.Text(f"{f.name} appears to be empty.")),
+                )
+                return
+
+            self._set_status("Generating embeddings…", f.name)
+            embeddings = await embed_texts(chunks)
+
+            if existing:
+                prepared.append(
+                    {
+                        "kind": "rechunk",
+                        "doc_id": existing["id"],
+                        "chunks": chunks,
+                        "embeddings": embeddings,
+                    }
+                )
+            else:
+                prepared.append(
+                    {
+                        "kind": "new",
+                        "name": f.name,
+                        "ext": ext,
+                        "size": f.size,
+                        "bytes": f.bytes,
+                        "file_hash": file_hash,
+                        "chunks": chunks,
+                        "embeddings": embeddings,
+                    }
+                )
+
+        # Phase 2: create chat, then do DB writes. On failure, roll back
+        # the chat (cascades chat_documents + orphan docs) and any uploaded
+        # storage objects whose RPC didn't complete.
+        self._set_status("Creating chat…")
+        base_name = result[0].name.rsplit(".", 1)[0]
+        title = base_name[:50] + "..." if len(base_name) > 50 else base_name
+        chat = create_chat(user_id, title=title)
+        chat_id = chat["id"]
+
+        orphan_storage_paths: list[str] = []
+        try:
+            for item in prepared:
+                if item["kind"] == "reuse":
+                    link_chat_document(chat_id, item["doc_id"])
+                elif item["kind"] == "rechunk":
+                    self._set_status("Saving chunks…")
                     await asyncio.to_thread(
-                        insert_chunks, doc["id"], chunks, embeddings
+                        insert_chunks,
+                        item["doc_id"],
+                        item["chunks"],
+                        item["embeddings"],
                     )
-                except Exception:
-                    delete_storage_object(storage_path)
-                    raise
-
-                document_ids.append(doc["id"])
-
-            self._set_status("Creating chat…")
-            base_name = result[0].name.rsplit(".", 1)[0]
-            title = base_name[:50] + "..." if len(base_name) > 50 else base_name
-            chat = create_chat(user_id, title=title)
-            chat_id = chat["id"]
-
-            for doc_id in document_ids:
-                link_chat_document(chat_id, doc_id)
+                    link_chat_document(chat_id, item["doc_id"])
+                else:
+                    self._set_status("Uploading document…", item["name"])
+                    storage_path = upload_document_to_storage(
+                        user_id, item["file_hash"], item["ext"], item["bytes"]
+                    )
+                    orphan_storage_paths.append(storage_path)
+                    self._set_status("Saving chunks…", item["name"])
+                    await asyncio.to_thread(
+                        upload_document_atomic,
+                        item["name"],
+                        storage_path,
+                        item["size"],
+                        item["file_hash"],
+                        chat_id,
+                        item["chunks"],
+                        item["embeddings"],
+                    )
+                    orphan_storage_paths.remove(storage_path)
         except Exception as ex:
+            for sp in orphan_storage_paths:
+                try:
+                    delete_storage_object(sp)
+                except Exception as cleanup_err:
+                    print(f"Failed to delete orphan storage {sp}: {cleanup_err}")
+            try:
+                await asyncio.to_thread(delete_chat, chat_id)
+            except Exception as cleanup_err:
+                print(f"Failed to roll back chat {chat_id}: {cleanup_err}")
             self.page_ref.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(f"Upload failed: {type(ex).__name__}: {ex}"),

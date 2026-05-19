@@ -52,30 +52,6 @@ def upload_document_to_storage(
     return storage_path
 
 
-def insert_document(
-    user_id: str,
-    file_name: str,
-    storage_path: str,
-    size_bytes: int,
-    file_hash: str,
-) -> dict:
-    res = (
-        supabase.table("documents")
-        .insert(
-            {
-                "user_id": user_id,
-                "file_name": file_name,
-                "storage_path": storage_path,
-                "size_bytes": size_bytes,
-                "file_hash": file_hash,
-                "status": "ready",
-            }
-        )
-        .execute()
-    )
-    return res.data[0]
-
-
 def update_document_status(document_id: str, status: str) -> None:
     supabase.table("documents").update({"status": status}).eq(
         "id", document_id
@@ -227,7 +203,34 @@ def insert_chunks(
         }
         for i, (content, embedding) in enumerate(zip(chunks, embeddings))
     ]
-    supabase.table("document_chunks").insert(rows).execute()
+    supabase.table("document_chunks").upsert(
+        rows, on_conflict="document_id,chunk_index"
+    ).execute()
+
+
+def upload_document_atomic(
+    file_name: str,
+    storage_path: str,
+    size_bytes: int,
+    file_hash: str,
+    chat_id: str,
+    chunks: list[str],
+    embeddings: list[list[float]],
+) -> str:
+    assert len(chunks) == len(embeddings), "chunks and embeddings length mismatch"
+    payload = [{"content": c, "embedding": e} for c, e in zip(chunks, embeddings)]
+    res = supabase.rpc(
+        "upload_document_atomic",
+        {
+            "p_file_name": file_name,
+            "p_storage_path": storage_path,
+            "p_size_bytes": size_bytes,
+            "p_file_hash": file_hash,
+            "p_chat_id": chat_id,
+            "p_chunks": payload,
+        },
+    ).execute()
+    return res.data
 
 
 def search_chunks(

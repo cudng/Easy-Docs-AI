@@ -34,7 +34,16 @@ def _map_history(history: list[dict]) -> list[dict]:
 def build_guest_messages(doc_text: str, history: list[dict]) -> list[dict]:
     system_content = f"{_GUEST_SYSTEM_PROMPT}\n\n<document>\n{doc_text}\n</document>"
     return [
-        {"role": "system", "content": system_content},
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "text",
+                    "text": system_content,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+        },
         *_map_history(history),
     ]
 
